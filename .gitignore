@@ -1,0 +1,20 @@
+# ModelSim / Questa build artifacts
+work/
+transcript
+vsim.wlf
+*.wlf
+modelsim.ini
+*.mti
+*.mpf
+wlf*
+
+# Quartus build artifacts
+db/
+incremental_db/
+output_files/
+*.qws
+*.rpt
+*.summary
+*.jdi
+*.pin
+*.sof.bak
