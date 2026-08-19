@@ -147,6 +147,7 @@ package aux_package is
 			--Inputs
 			clk_i					: IN 	STD_LOGIC;
 			rst_i 				: IN 	STD_LOGIC;
+			pc_hold				: IN 	STD_LOGIC := '0';	-- freeze the PC (divider stall)
 			addr_gen_i 		: IN 	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
 			Branch_ctrl_i	: IN 	STD_LOGIC;
 			brTaken_i 		: IN 	STD_LOGIC;

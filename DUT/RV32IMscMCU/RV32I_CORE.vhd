@@ -9,6 +9,7 @@ USE IEEE.STD_LOGIC_ARITH.ALL;
 use ieee.std_logic_unsigned.all;
 USE work.cond_compilation_package.all;
 USE work.aux_package.all;
+USE work.const_package.all;					-- for ALU_DIV / ALU_REM op-codes
 
 
 ENTITY RV32I_CORE IS
@@ -77,6 +78,15 @@ ARCHITECTURE structure OF RV32I_CORE IS
 	SIGNAL instruction_w	: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 	SIGNAL mclk_w 				: STD_LOGIC;
 	SIGNAL mclk_cnt_q			: STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0);
+	-- divider accelerator integration
+	SIGNAL div_instr_w		: STD_LOGIC;
+	SIGNAL divena_w				: STD_LOGIC;
+	SIGNAL divbusy_w			: STD_LOGIC;
+	SIGNAL stall_w				: STD_LOGIC;
+	SIGNAL quotient_w			: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+	SIGNAL residue_w			: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+	SIGNAL reg_write_gated_w	: STD_LOGIC;
+	SIGNAL exe_result_w		: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 
 BEGIN
 	
@@ -106,8 +116,9 @@ BEGIN
 	)
 	PORT MAP (
 		--Inputs
-		clk_i 					=> mclk_w,  
-		rst_i 					=> rst_i, 
+		clk_i 					=> mclk_w,
+		rst_i 					=> rst_i,
+		pc_hold					=> stall_w,				-- freeze PC during a divide
 		addr_gen_i 			=> addr_gen_w,
 		Branch_ctrl_i 	=> branch_w,
 		brTaken_i				=> brTaken_w,
@@ -135,9 +146,9 @@ BEGIN
 		pc_plus4_i	 		=> pc_plus4_w,
     instruction_i 	=> instruction_w,
     dtcm_data_rd_i 	=> dtcm_data_rd_w,
-		alu_res_i 			=> alu_res_w,
+		alu_res_i 			=> exe_result_w,			-- ALU / mul / quotient / remainder
 		RegDst_ctrl_i		=> reg_dst_w,
-		RegWrite_ctrl_i => reg_write_w,
+		RegWrite_ctrl_i => reg_write_gated_w,	-- suppressed while stalled
 		MemtoReg_ctrl_i => MemtoReg_w,
 		
 		--Outputs
@@ -215,12 +226,51 @@ BEGIN
 		MemWrite_ctrl_i 	=> mem_write_w,
 				
 		--Outputs
-		dtcm_data_rd_o 		=> dtcm_data_rd_w 
-	);	
-	
+		dtcm_data_rd_o 		=> dtcm_data_rd_w
+	);
+
+	--=======================================
+	-- Divider accelerator + stall controller
+	--=======================================
+	-- a div/rem instruction is currently in execute
+	div_instr_w	<=	'1' WHEN (alu_op_w = ALU_DIV) or (alu_op_w = ALU_REM) ELSE '0';
+
+	DIV: entity work.divider
+	generic map (
+		N	=> DATA_BUS_WIDTH
+	)
+	PORT MAP (
+		DIVCLK			=> mclk_w,				-- single clock for now (= MCLK)
+		DIVRST			=> rst_i,
+		DIVENA			=> divena_w,
+		read_data1	=> read_data1_w,	-- rs1 = dividend
+		read_data2	=> read_data2_w,	-- rs2 = divisor
+		Quotient		=> quotient_w,
+		Residue			=> residue_w,
+		DIVBUSY			=> divbusy_w
+	);
+
+	DSTALL: entity work.div_stall_ctrl
+	PORT MAP (
+		clk_i				=> mclk_w,
+		rst_i				=> rst_i,
+		div_instr_i	=> div_instr_w,
+		divbusy_i		=> divbusy_w,			-- single clock: no sync needed
+		divena_o		=> divena_w,
+		stall_o			=> stall_w
+	);
+
+	-- suppress the register write while stalled; one clean write on completion
+	reg_write_gated_w	<=	reg_write_w and (not stall_w);
+
+	-- write-back result mux: quotient / remainder / (ALU, incl. mul)
+	exe_result_w	<=	quotient_w	WHEN (alu_op_w = ALU_DIV) ELSE
+									residue_w		WHEN (alu_op_w = ALU_REM) ELSE
+									alu_res_w;
+
 	--=======================================
 	-- MCLK counter register connection
-	--=======================================									
+	--=======================================
 	process (mclk_w , rst_i)
 	begin
 		if rst_i = '1' then
@@ -241,8 +291,8 @@ BEGIN
 	  
   read_data1_o 			<= 	read_data1_w;																-- IDECODE output
   read_data2_o 			<= 	read_data2_w;																-- IDECODE output
-  write_data_o  		<= 	dtcm_data_rd_w WHEN MemtoReg_w = '1' ELSE		-- IDECODE input(Write-Back) 
-												alu_res_w;
+  write_data_o  		<= 	dtcm_data_rd_w WHEN MemtoReg_w = '1' ELSE		-- IDECODE input(Write-Back)
+												exe_result_w;
 												
   alu_res_o 				<= 	alu_res_w;																	-- EXECUTE output			
   brTaken_o 				<= 	brTaken_w;																	-- EXECUTE output
