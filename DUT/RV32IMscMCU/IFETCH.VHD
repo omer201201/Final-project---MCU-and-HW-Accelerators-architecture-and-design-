@@ -91,9 +91,10 @@ END PROCESS;
 	brTaken_w <= 	Branch_ctrl_i AND brTaken_i;
 	
 	next_pc_w	<=	(others => '0') 									WHEN	rst_q 									ELSE
+								pc_q															WHEN	pc_hold = '1'						ELSE	-- re-fetch current instr while stalled
 								alu_res_i(PC_WIDTH-1 DOWNTO 0)		WHEN	Jalr_ctrl_i							ELSE	-- case of jalr
-								addr_gen_i(PC_WIDTH-1 DOWNTO 0)		WHEN	brTaken_w or Jal_ctrl_i ELSE	-- case of Branch Taken or jal 
-								pc_plus4_q(PC_WIDTH-1 DOWNTO 0);																			-- case of Branch Not-Taken 				
+								addr_gen_i(PC_WIDTH-1 DOWNTO 0)		WHEN	brTaken_w or Jal_ctrl_i ELSE	-- case of Branch Taken or jal
+								pc_plus4_q(PC_WIDTH-1 DOWNTO 0);																			-- case of Branch Not-Taken
 -----------------------------------------------------------------------------------
 -- pc_plus4 register
 -------------------------------------------------------------------------------------
