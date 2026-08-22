@@ -18,3 +18,8 @@ output_files/
 *.jdi
 *.pin
 *.sof.bak
+
+# FPGA sim/power artifacts
+*.vcd
+simulation/
+*.bak
