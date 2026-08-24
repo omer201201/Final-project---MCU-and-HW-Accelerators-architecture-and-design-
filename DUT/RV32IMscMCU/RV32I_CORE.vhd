@@ -48,7 +48,18 @@ ENTITY RV32I_CORE IS
 		dtcm_data_wr_o		:OUT 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 		dtcm_data_rd_o		:OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 		
-		mclk_cnt_o				:OUT	STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0)
+		mclk_cnt_o				:OUT	STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0);
+
+		-- GPIO board I/O (P3, MMIO)
+		SW_i							:IN	STD_LOGIC_VECTOR(7 DOWNTO 0);
+		PB_i							:IN	STD_LOGIC_VECTOR(2 DOWNTO 0);
+		LEDR_o						:OUT	STD_LOGIC_VECTOR(7 DOWNTO 0);
+		HEX0_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+		HEX1_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+		HEX2_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+		HEX3_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+		HEX4_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+		HEX5_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0)
 	);		
 END RV32I_CORE;
 --============================================================================
@@ -62,6 +73,9 @@ ARCHITECTURE structure OF RV32I_CORE IS
 	SIGNAL addr_gen_w 		: STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
 	SIGNAL alu_res_w 			: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 	SIGNAL dtcm_data_rd_w : STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+	-- P3 MMIO bus
+	SIGNAL mem_rdata_w	: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+	SIGNAL dtcm_we_w		: STD_LOGIC;
 	SIGNAL dtcm_addr_w 		: STD_LOGIC_VECTOR(DTCM_ADDR_WIDTH-1 DOWNTO 0);
 	SIGNAL alu_src_w 			: STD_LOGIC;
 	SIGNAL branch_w 			: STD_LOGIC;
@@ -145,7 +159,7 @@ BEGIN
 		rst_i 					=> rst_i,
 		pc_plus4_i	 		=> pc_plus4_w,
     instruction_i 	=> instruction_w,
-    dtcm_data_rd_i 	=> dtcm_data_rd_w,
+    dtcm_data_rd_i 	=> mem_rdata_w,
 		alu_res_i 			=> exe_result_w,			-- ALU / mul / quotient / remainder
 		RegDst_ctrl_i		=> reg_dst_w,
 		RegWrite_ctrl_i => reg_write_gated_w,	-- suppressed while stalled
@@ -223,10 +237,37 @@ BEGIN
 		dtcm_addr_i 			=> dtcm_addr_w,
 		dtcm_data_wr_i 		=> read_data2_w,
 		MemRead_ctrl_i 		=> mem_read_w, 
-		MemWrite_ctrl_i 	=> mem_write_w,
+		MemWrite_ctrl_i 	=> dtcm_we_w,
 				
 		--Outputs
 		dtcm_data_rd_o 		=> dtcm_data_rd_w
+	);
+
+	--=======================================
+	-- P3: MMIO bus interface (address decode + GPIO)
+	--=======================================
+	BUSIF: entity work.bus_interface
+	generic map (
+		DATA_WIDTH => DATA_BUS_WIDTH
+	)
+	PORT MAP (
+		clk_i				=> mclk_w,
+		rst_i				=> rst_i,
+		addr_i			=> alu_res_w,
+		wdata_i			=> read_data2_w,
+		mem_write_i	=> mem_write_w,
+		dtcm_rdata_i	=> dtcm_data_rd_w,
+		dtcm_we_o		=> dtcm_we_w,
+		rdata_o			=> mem_rdata_w,
+		SW_i				=> SW_i,
+		PB_i				=> PB_i,
+		LEDR_o			=> LEDR_o,
+		HEX0_o			=> HEX0_o,
+		HEX1_o			=> HEX1_o,
+		HEX2_o			=> HEX2_o,
+		HEX3_o			=> HEX3_o,
+		HEX4_o			=> HEX4_o,
+		HEX5_o			=> HEX5_o
 	);
 
 	--=======================================
@@ -291,7 +332,7 @@ BEGIN
 	  
   read_data1_o 			<= 	read_data1_w;																-- IDECODE output
   read_data2_o 			<= 	read_data2_w;																-- IDECODE output
-  write_data_o  		<= 	dtcm_data_rd_w WHEN MemtoReg_w = '1' ELSE		-- IDECODE input(Write-Back)
+  write_data_o  		<= 	mem_rdata_w WHEN MemtoReg_w = '1' ELSE		-- IDECODE input(Write-Back)
 												exe_result_w;
 												
   alu_res_o 				<= 	alu_res_w;																	-- EXECUTE output			

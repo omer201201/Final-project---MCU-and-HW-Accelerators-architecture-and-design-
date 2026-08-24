@@ -45,7 +45,18 @@ package aux_package is
 			dtcm_data_wr_o		:OUT 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 			dtcm_data_rd_o		:OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 			
-			mclk_cnt_o				:OUT	STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0)
+			mclk_cnt_o				:OUT	STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0);
+
+			-- GPIO board I/O (P3, MMIO). Inputs default so existing TBs still elaborate.
+			SW_i							:IN	STD_LOGIC_VECTOR(7 DOWNTO 0) := (OTHERS => '0');
+			PB_i							:IN	STD_LOGIC_VECTOR(2 DOWNTO 0) := (OTHERS => '0');
+			LEDR_o						:OUT	STD_LOGIC_VECTOR(7 DOWNTO 0);
+			HEX0_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+			HEX1_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+			HEX2_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+			HEX3_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+			HEX4_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+			HEX5_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0)
 		);		
 	end component;
 ---------------------------------------------------------  

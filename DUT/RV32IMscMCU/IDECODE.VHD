@@ -92,11 +92,11 @@ BEGIN
 
 	
 	with	opc_w select
-		SignExt_o <=	SignExt_Iimm_w														when ITYPE_OPC,
+		SignExt_o <=	SignExt_Iimm_w														when ITYPE_OPC | "0000011",  -- ITYPE (ALU-imm) + LOAD(0x03): both use I-type immediate
 									SignExt_Iimm_w														when INST_JALR(6 DOWNTO 0),
 									SignExt_Simm_w														when STYPE_OPC,
 									SignExt_SBimm_w 													when SBTYPE_OPC,
-									SignExt_Uimm_w(19 DOWNTO 0) & ZEROS_IMM12	when UTYPE_OPC,
+									SignExt_Uimm_w(19 DOWNTO 0) & ZEROS_IMM12	when "0010111" | "0110111",  -- U-type: AUIPC(0x17) | LUI(0x37); UTYPE_OPC const only matches AUIPC
 									SignExt_UJimm_w														when UJTYPE_OPC,
 									(others => '0')														when others;
 	--==============================================================================
