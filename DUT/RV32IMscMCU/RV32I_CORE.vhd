@@ -107,6 +107,29 @@ ARCHITECTURE structure OF RV32I_CORE IS
 	SIGNAL reg_write_gated_w	: STD_LOGIC;
 	SIGNAL exe_result_w		: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 
+	-- P4b: CPU-side interrupt service (2-cycle FSM + datapath overrides)
+	SIGNAL intr_w					: STD_LOGIC;										-- INTR from the controller (via bus_interface)
+	SIGNAL inta_w					: STD_LOGIC;										-- INTA to the controller (SVC1)
+	SIGNAL svc_active_w		: STD_LOGIC;
+	SIGNAL capture_w			: STD_LOGIC;
+	SIGNAL clr_gie_w			: STD_LOGIC;
+	SIGNAL vec_load_w			: STD_LOGIC;
+	SIGNAL set_pc_w				: STD_LOGIC;
+	SIGNAL write_tp_w			: STD_LOGIC;
+	SIGNAL can_take_w			: STD_LOGIC;
+	SIGNAL gp_w						: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);	-- x3 (GIE = gp_w(0))
+	SIGNAL type_captured_q	: STD_LOGIC_VECTOR(7 DOWNTO 0);				-- latched TYPE (SVC1)
+	SIGNAL return_pc_q		: STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);	-- latched return address (SVC1)
+	SIGNAL intr_we_w			: STD_LOGIC;										-- RF write override enable
+	SIGNAL intr_rd_w			: STD_LOGIC_VECTOR(4 DOWNTO 0);				-- RF write override destination
+	SIGNAL intr_wdata_w		: STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);	-- RF write override data
+	SIGNAL reti_w					: STD_LOGIC;										-- decode of reti = jalr x0,0(tp)
+	SIGNAL pc_freeze_w			: STD_LOGIC;										-- SVC1 PC freeze
+	SIGNAL ifetch_pc_hold_w	: STD_LOGIC;										-- stall OR SVC1 freeze -> IFETCH.pc_hold
+	SIGNAL mem_write_gated_w	: STD_LOGIC;									-- MemWrite suppressed during service
+	SIGNAL dtcm_addr_normal_w	: STD_LOGIC_VECTOR(DTCM_ADDR_WIDTH-1 DOWNTO 0);
+	SIGNAL vec_addr_w			: STD_LOGIC_VECTOR(DTCM_ADDR_WIDTH-1 DOWNTO 0);	-- DTCM word addr = TYPE/4
+
 BEGIN
 	
 	--=======================================
@@ -137,14 +160,16 @@ BEGIN
 		--Inputs
 		clk_i 					=> mclk_w,
 		rst_i 					=> rst_i,
-		pc_hold					=> stall_w,				-- freeze PC during a divide
+		pc_hold					=> ifetch_pc_hold_w,	-- freeze PC: divider stall OR interrupt SVC1
 		addr_gen_i 			=> addr_gen_w,
 		Branch_ctrl_i 	=> branch_w,
 		brTaken_i				=> brTaken_w,
 		Jal_ctrl_i 			=> Jal_ctrl_w,
 		Jalr_ctrl_i			=> Jalr_ctrl_w,
 		alu_res_i				=> alu_res_w,
-		
+		set_pc_i				=> set_pc_w,				-- interrupt vector jump (SVC2)
+		intr_vec_i			=> dtcm_data_rd_w(PC_WIDTH-1 DOWNTO 0),	-- Mem[TYPE] = ISR address
+
 		--Outputs
 		pc_o 						=> pc_w,
 		pc_plus4_o	 		=> pc_plus4_w,
@@ -167,13 +192,17 @@ BEGIN
     dtcm_data_rd_i 	=> mem_rdata_w,
 		alu_res_i 			=> exe_result_w,			-- ALU / mul / quotient / remainder
 		RegDst_ctrl_i		=> reg_dst_w,
-		RegWrite_ctrl_i => reg_write_gated_w,	-- suppressed while stalled
+		RegWrite_ctrl_i => reg_write_gated_w,	-- suppressed while stalled / during service
 		MemtoReg_ctrl_i => MemtoReg_w,
-		
+		intr_we_i				=> intr_we_w,			-- P4b RF write override
+		intr_rd_i				=> intr_rd_w,
+		intr_wdata_i		=> intr_wdata_w,
+
 		--Outputs
 		read_data1_o 		=> read_data1_w,
     read_data2_o 		=> read_data2_w,
-		SignExt_o 			=> sign_extend_w	 
+		gp_o						=> gp_w,					-- x3 -> GIE = gp_w(0)
+		SignExt_o 			=> sign_extend_w
 	);
 	--=======================================
 	-- CONTROL module connection
@@ -222,12 +251,17 @@ BEGIN
 	--=======================================
 	-- DTCM module connection
 	--=======================================
-	G1: 
+	G1:
 	if (WORD_GRANULARITY = True) generate -- i.e. each WORD has a unike address
-		dtcm_addr_w	<= alu_res_w(MA_WIDTH-1 DOWNTO 2); -- increment memory address by 4;
+		dtcm_addr_normal_w	<= alu_res_w(MA_WIDTH-1 DOWNTO 2); -- increment memory address by 4;
+		-- vector fetch: DTCM word = TYPE/4  (drop the low 2 bits of the byte offset)
+		vec_addr_w	<= CONV_STD_LOGIC_VECTOR(0, DTCM_ADDR_WIDTH-6) & type_captured_q(7 DOWNTO 2);
 	elsif (WORD_GRANULARITY = False) generate -- i.e. each BYTE has a unike address
-		dtcm_addr_w	<= alu_res_w(MA_WIDTH-1 DOWNTO 0);
+		dtcm_addr_normal_w	<= alu_res_w(MA_WIDTH-1 DOWNTO 0);
+		vec_addr_w	<= CONV_STD_LOGIC_VECTOR(0, DTCM_ADDR_WIDTH-8) & type_captured_q;
 	end generate;
+	-- SVC2: the CPU (bus master) drives the DTCM address with the captured TYPE
+	dtcm_addr_w	<= vec_addr_w WHEN vec_load_w = '1' ELSE dtcm_addr_normal_w;
 	
 	MEM:  dmemory
 	generic map(
@@ -260,7 +294,7 @@ BEGIN
 		rst_i				=> rst_i,
 		addr_i			=> alu_res_w,
 		wdata_i			=> read_data2_w,
-		mem_write_i	=> mem_write_w,
+		mem_write_i	=> mem_write_gated_w,	-- suppressed during interrupt service
 		dtcm_rdata_i	=> dtcm_data_rd_w,
 		dtcm_we_o		=> dtcm_we_w,
 		rdata_o			=> mem_rdata_w,
@@ -275,8 +309,10 @@ BEGIN
 		HEX5_o			=> HEX5_o,
 		pwm_o			=> pwm_o,
 		btifg_o			=> btifg_o,
-		intr_o			=> intr_o
+		intr_o			=> intr_w,				-- INTR -> interrupt FSM (and top observe)
+		inta_i			=> inta_w				-- INTA from the interrupt FSM (SVC1)
 	);
+	intr_o <= intr_w;
 
 	--=======================================
 	-- Divider accelerator + stall controller
@@ -309,13 +345,83 @@ BEGIN
 		stall_o			=> stall_w
 	);
 
-	-- suppress the register write while stalled; one clean write on completion
-	reg_write_gated_w	<=	reg_write_w and (not stall_w);
+	-- suppress the register write while stalled or during interrupt service
+	-- (the FSM's own forced writes go through intr_we_w, not this path)
+	reg_write_gated_w	<=	reg_write_w and (not stall_w) and (not svc_active_w);
 
 	-- write-back result mux: quotient / remainder / (ALU, incl. mul)
 	exe_result_w	<=	quotient_w	WHEN (alu_op_w = ALU_DIV) ELSE
 									residue_w		WHEN (alu_op_w = ALU_REM) ELSE
 									alu_res_w;
+
+	--=======================================
+	-- P4b: CPU-side interrupt service
+	--=======================================
+	-- take an interrupt only at an instruction boundary (not mid-divide)
+	can_take_w <= not stall_w;
+
+	IRQ_FSM: entity work.intr_fsm
+	PORT MAP (
+		clk_i				=> mclk_w,
+		rst_i				=> rst_i,
+		intr_i			=> intr_w,
+		gie_i				=> gp_w(0),				-- GIE = gp[0]
+		can_take_i	=> can_take_w,
+		inta_o			=> inta_w,
+		svc_active_o	=> svc_active_w,
+		capture_o		=> capture_w,
+		clr_gie_o		=> clr_gie_w,
+		vec_load_o		=> vec_load_w,
+		set_pc_o			=> set_pc_w,
+		write_tp_o		=> write_tp_w
+	);
+
+	-- freeze the PC during SVC1 (hold the deferred instruction); SVC2 redirects it
+	pc_freeze_w			<=	svc_active_w and (not set_pc_w);
+	ifetch_pc_hold_w	<=	stall_w or pc_freeze_w;
+
+	-- keep the deferred store from touching memory during service
+	mem_write_gated_w	<=	mem_write_w and (not svc_active_w);
+
+	-- reti = jalr x0, 0(tp)  (tp = x4)  ->  encodes as 0x00020067
+	reti_w <= '1' WHEN instruction_w = X"00020067" ELSE '0';
+
+	-- SVC1: latch TYPE (off the data bus during INTA) and the return address
+	intr_capture: process (mclk_w, rst_i)
+	begin
+		if rst_i = '1' then
+			type_captured_q	<= (others => '0');
+			return_pc_q			<= (others => '0');
+		elsif rising_edge(mclk_w) then
+			if capture_w = '1' then
+				type_captured_q	<= mem_rdata_w(7 DOWNTO 0);	-- controller drives TYPE here
+				return_pc_q			<= pc_w;								-- PC of the deferred instruction
+			end if;
+		end if;
+	end process;
+
+	-- RF write override:  SVC1 clears GIE (gp[0]=0);  SVC2 saves tp=return;
+	-- reti sets GIE (gp[0]=1).  These are mutually exclusive by FSM state.
+	intr_rf_override: process (clr_gie_w, write_tp_w, reti_w, gp_w, return_pc_q)
+	begin
+		if clr_gie_w = '1' then							-- SVC1
+			intr_we_w		<= '1';
+			intr_rd_w		<= "00011";					-- x3 = gp
+			intr_wdata_w	<= gp_w and X"FFFFFFFE";	-- clear bit 0
+		elsif write_tp_w = '1' then					-- SVC2
+			intr_we_w		<= '1';
+			intr_rd_w		<= "00100";					-- x4 = tp
+			intr_wdata_w	<= CONV_STD_LOGIC_VECTOR(0, DATA_BUS_WIDTH-PC_WIDTH) & return_pc_q;
+		elsif reti_w = '1' then							-- reti
+			intr_we_w		<= '1';
+			intr_rd_w		<= "00011";					-- x3 = gp
+			intr_wdata_w	<= gp_w or X"00000001";		-- set bit 0
+		else
+			intr_we_w		<= '0';
+			intr_rd_w		<= "00000";
+			intr_wdata_w	<= (others => '0');
+		end if;
+	end process;
 
 	--=======================================
 	-- MCLK counter register connection

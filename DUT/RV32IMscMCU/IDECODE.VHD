@@ -27,11 +27,20 @@ ENTITY Idecode IS
 		RegDst_ctrl_i 	: IN 	STD_LOGIC;
 		RegWrite_ctrl_i : IN 	STD_LOGIC;
 		MemtoReg_ctrl_i : IN 	STD_LOGIC;
-		
+
+		-- P4b interrupt-service write override (from the CPU-side interrupt FSM).
+		-- When intr_we_i='1' the RF write port is forced to RF(intr_rd_i)<=intr_wdata_i,
+		-- taking precedence over the normal instruction write-back. Defaults keep
+		-- existing instantiations/TBs elaborating unchanged.
+		intr_we_i			: IN 	STD_LOGIC := '0';
+		intr_rd_i			: IN 	STD_LOGIC_VECTOR(4 DOWNTO 0) := (OTHERS => '0');
+		intr_wdata_i	: IN 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0) := (OTHERS => '0');
+
 		--Outputs
 		read_data1_o		: OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 		read_data2_o		: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-		SignExt_o 			: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)		 
+		gp_o					: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);	-- x3 (GIE lives in gp[0])
+		SignExt_o 			: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)
 	);
 END Idecode;
 
@@ -75,8 +84,11 @@ BEGIN
 	-- Read the Register 1 output of the Register-File
 	read_data1_o <= RF_q(CONV_INTEGER(rs1_w));
 	
-	-- Read the Register 2 output of the Register-File		 
+	-- Read the Register 2 output of the Register-File
 	read_data2_o <= RF_q(CONV_INTEGER(rs2_w));
+
+	-- Expose gp (x3) so the CPU-side interrupt FSM can read/modify GIE = gp[0]
+	gp_o <= RF_q(3);
 	
 	-- Mux to bypass data memory for Rformat instructions
 	write_data_w <= ZEROS_DBUS2PCADDR & pc_plus4_i				WHEN	RegDst_ctrl_i				ELSE
@@ -109,7 +121,11 @@ BEGIN
 				RF_q(i) <= CONV_STD_LOGIC_VECTOR(0,32);
 			END LOOP;
 		elsif (clk_i'event and clk_i='1') then
-			if (RegWrite_ctrl_i = '1' AND rd_w /= 0) then	-- RF(0) hard-wired of value zero
+			if (intr_we_i = '1') then						-- P4b: interrupt service forces the write (gp clear / tp save / GIE set)
+				if (intr_rd_i /= 0) then					-- RF(0) hard-wired of value zero
+					RF_q(CONV_INTEGER(intr_rd_i)) <= intr_wdata_i;
+				end if;
+			elsif (RegWrite_ctrl_i = '1' AND rd_w /= 0) then	-- RF(0) hard-wired of value zero
 				RF_q(CONV_INTEGER(rd_w)) <= write_data_w;
 				-- index type is integer so we must use conv_integer for type casting
 			end if;

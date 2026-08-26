@@ -28,9 +28,17 @@ vcom -2008 $D/EXECUTE.VHD
 vcom -2008 $D/DMEMORY.VHD
 vcom -2008 $D/seg7.vhd
 vcom -2008 $D/gpio.vhd
+vcom -2008 $D/bt_prescaler.vhd
+vcom -2008 $D/bt_counter.vhd
+vcom -2008 $D/bt_output_unit.vhd
+vcom -2008 $D/bt_capture.vhd
+vcom -2008 $D/bt_regs.vhd
+vcom -2008 $D/BasicTimer.vhd
+vcom -2008 $D/intr_ctrl.vhd
 vcom -2008 $D/bus_interface.vhd
 vcom -2008 $D/divider.vhd
 vcom -2008 $D/div_stall_ctrl.vhd
+vcom -2008 $D/intr_fsm.vhd
 vcom -2008 $D/RV32I_CORE.vhd
 vcom -2008 TB/RV32IMscMCU/tb_core_gpio_test0.vhd
 

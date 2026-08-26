@@ -52,7 +52,8 @@ entity bus_interface is
         pwm_o        : out std_logic;                              -- PWM output pin
         btifg_o      : out std_logic;                              -- timer interrupt pulse (debug/observe)
         -- ---- Interrupt controller ----
-        intr_o       : out std_logic                               -- aggregated INTR -> CPU (P4b consumes)
+        intr_o       : out std_logic;                              -- aggregated INTR -> CPU (P4b consumes)
+        inta_i       : in  std_logic := '0'                        -- INTA from the CPU-side FSM (SVC1); default keeps P3/smoke TBs valid
     );
 end entity bus_interface;
 
@@ -208,7 +209,12 @@ begin
     periph_rdata <= timer_rdata when cs_timer = '1' else
                     intr_rdata  when cs_intr  = '1' else
                     gpio_rdata;
-    rdata_o      <= periph_rdata when is_peripheral = '1' else dtcm_rdata_i;
+    -- During INTA (SVC1) the controller owns the data bus and drives the winner's
+    -- TYPE (intr_rdata), regardless of the deferred instruction's address decode,
+    -- so the CPU can capture it (spec p.15). Otherwise: normal peripheral/DTCM mux.
+    rdata_o      <= intr_rdata   when inta_i = '1'        else
+                    periph_rdata when is_peripheral = '1' else
+                    dtcm_rdata_i;
 
     ----------------------------------------------------------------------------
     -- KEY conditioning : 2-FF synchroniser + press (falling) edge -> 1-cyc pulse
@@ -281,7 +287,7 @@ begin
             wdata_i => wdata_i, rdata_o => intr_rdata,
             src_i => src_intr,
             intr_o => intr_o,
-            inta_i => '0'
+            inta_i => inta_i
         );
 
 end architecture rtl;

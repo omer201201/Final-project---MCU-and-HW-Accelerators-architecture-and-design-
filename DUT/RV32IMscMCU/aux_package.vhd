@@ -141,11 +141,16 @@ package aux_package is
 			RegDst_ctrl_i 	: IN 	STD_LOGIC;
 			RegWrite_ctrl_i : IN 	STD_LOGIC;
 			MemtoReg_ctrl_i : IN 	STD_LOGIC;
-			
+
+			intr_we_i			: IN 	STD_LOGIC := '0';
+			intr_rd_i			: IN 	STD_LOGIC_VECTOR(4 DOWNTO 0) := (OTHERS => '0');
+			intr_wdata_i	: IN 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0) := (OTHERS => '0');
+
 			--Outputs
 			read_data1_o		: OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 			read_data2_o		: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			SignExt_o 			: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)		 
+			gp_o					: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			SignExt_o 			: OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)
 		);
 	end component;
 ---------------------------------------------------------		
@@ -168,7 +173,9 @@ package aux_package is
 			Jal_ctrl_i		: IN 	STD_LOGIC;
 			Jalr_ctrl_i		: IN 	STD_LOGIC;
 			alu_res_i 		: IN 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			
+			set_pc_i			: IN 	STD_LOGIC := '0';
+			intr_vec_i		: IN 	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0) := (OTHERS => '0');
+
 			--Outputs
 			pc_o 					: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
 			pc_plus4_o 		: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);

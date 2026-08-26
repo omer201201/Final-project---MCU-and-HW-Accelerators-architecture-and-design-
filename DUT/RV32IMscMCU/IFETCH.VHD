@@ -31,7 +31,12 @@ ENTITY Ifetch IS
 		Jal_ctrl_i		: IN 	STD_LOGIC;
 		Jalr_ctrl_i		: IN 	STD_LOGIC;
 		alu_res_i 		: IN 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-		
+		-- P4b interrupt vector: on SVC2 the CPU jumps PC <= Mem[TYPE]. Highest
+		-- priority (after reset) so it overrides the deferred instruction's own
+		-- next-PC (branch/jal/jalr). Defaults keep existing instantiations valid.
+		set_pc_i			: IN 	STD_LOGIC := '0';
+		intr_vec_i		: IN 	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0) := (OTHERS => '0');
+
 		--Outputs
 		pc_o 					: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
 		pc_plus4_o 		: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
@@ -91,7 +96,8 @@ END PROCESS;
 	brTaken_w <= 	Branch_ctrl_i AND brTaken_i;
 	
 	next_pc_w	<=	(others => '0') 									WHEN	rst_q 									ELSE
-								pc_q															WHEN	pc_hold = '1'						ELSE	-- re-fetch current instr while stalled
+								intr_vec_i												WHEN	set_pc_i = '1'					ELSE	-- P4b: interrupt vector (SVC2) -> PC = Mem[TYPE]
+								pc_q															WHEN	pc_hold = '1'						ELSE	-- re-fetch current instr while stalled / SVC1 freeze
 								alu_res_i(PC_WIDTH-1 DOWNTO 0)		WHEN	Jalr_ctrl_i							ELSE	-- case of jalr
 								addr_gen_i(PC_WIDTH-1 DOWNTO 0)		WHEN	brTaken_w or Jal_ctrl_i ELSE	-- case of Branch Taken or jal
 								pc_plus4_q(PC_WIDTH-1 DOWNTO 0);																			-- case of Branch Not-Taken
