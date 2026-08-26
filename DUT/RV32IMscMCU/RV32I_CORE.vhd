@@ -59,7 +59,12 @@ ENTITY RV32I_CORE IS
 		HEX2_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
 		HEX3_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
 		HEX4_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
-		HEX5_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0)
+		HEX5_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+
+		-- Basic Timer (P4a)
+		pwm_o						:OUT	STD_LOGIC;
+		btifg_o						:OUT	STD_LOGIC;
+		intr_o						:OUT	STD_LOGIC
 	);		
 END RV32I_CORE;
 --============================================================================
@@ -267,7 +272,10 @@ BEGIN
 		HEX2_o			=> HEX2_o,
 		HEX3_o			=> HEX3_o,
 		HEX4_o			=> HEX4_o,
-		HEX5_o			=> HEX5_o
+		HEX5_o			=> HEX5_o,
+		pwm_o			=> pwm_o,
+		btifg_o			=> btifg_o,
+		intr_o			=> intr_o
 	);
 
 	--=======================================

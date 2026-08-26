@@ -48,7 +48,7 @@ package cond_compilation_package is
 --==================================================================================================================
 -- 															Conditional Compilation defined by 8-Parameters
 --==================================================================================================================
-	constant G_MODELSIM					: integer	:= 0;											-- options{1=MODELSIM,0=FPGA}
+	constant G_MODELSIM					: integer	:= 1;											-- options{1=MODELSIM,0=FPGA}
 	constant G_WORD_GRANULARITY : boolean := True;									-- options{True,False}
 	constant G_ADDRWIDTH 				: integer := M9K_TCM8KiB_ADDRWIDTH;	-- options{M9K_MODELSIM_ADDRWIDTH,M4K_ADDRWIDTH} 
 	constant G_DATA_WORDSNUM 		: integer := M9K_TCM8KiB_WORDSNUM;	-- options{M9K_MODELSIM_WORDSNUM,M4K_WORDSNUM}

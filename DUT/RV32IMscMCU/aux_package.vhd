@@ -56,7 +56,10 @@ package aux_package is
 			HEX2_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
 			HEX3_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
 			HEX4_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
-			HEX5_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0)
+			HEX5_o						:OUT	STD_LOGIC_VECTOR(6 DOWNTO 0);
+			pwm_o						:OUT	STD_LOGIC;
+			btifg_o						:OUT	STD_LOGIC;
+			intr_o						:OUT	STD_LOGIC
 		);		
 	end component;
 ---------------------------------------------------------  
