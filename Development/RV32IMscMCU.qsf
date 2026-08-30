@@ -1,0 +1,166 @@
+# -------------------------------------------------------------------------- #
+#
+# Copyright (C) 2021  Intel Corporation. All rights reserved.
+# Your use of Intel Corporation's design tools, logic functions 
+# and other software and tools, and any partner logic 
+# functions, and any output files from any of the foregoing 
+# (including device programming or simulation files), and any 
+# associated documentation or information are expressly subject 
+# to the terms and conditions of the Intel Program License 
+# Subscription Agreement, the Intel Quartus Prime License Agreement,
+# the Intel FPGA IP License Agreement, or other applicable license
+# agreement, including, without limitation, that your use is for
+# the sole purpose of programming logic devices manufactured by
+# Intel and sold by Intel or its authorized distributors.  Please
+# refer to the applicable agreement for further details, at
+# https://fpgasoftware.intel.com/eula.
+#
+# -------------------------------------------------------------------------- #
+#
+# Quartus Prime
+# Version 21.1.0 Build 842 10/21/2021 SJ Lite Edition
+# Date created = 22:58:06  August 29, 2026
+#
+# -------------------------------------------------------------------------- #
+#
+# Notes:
+#
+# 1) The default values for assignments are stored in the file:
+#		RV32IMscMCU_assignment_defaults.qdf
+#    If this file doesn't exist, see file:
+#		assignment_defaults.qdf
+#
+# 2) Intel recommends that you do not modify this file. This
+#    file is updated automatically by the Quartus Prime software
+#    and any changes you make may be lost or overwritten.
+#
+# -------------------------------------------------------------------------- #
+
+
+set_global_assignment -name FAMILY "Cyclone IV E"
+set_global_assignment -name DEVICE EP4CE115F29C7
+set_global_assignment -name TOP_LEVEL_ENTITY RV32I_CORE
+set_global_assignment -name ORIGINAL_QUARTUS_VERSION 21.1.0
+set_global_assignment -name PROJECT_CREATION_TIME_DATE "22:58:06  AUGUST 29, 2026"
+set_global_assignment -name LAST_QUARTUS_VERSION "21.1.0 Lite Edition"
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/cond_compilation_package.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/const_package.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/aux_package.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/PLL.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/IFETCH.VHD
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/IDECODE.VHD
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/CONTROL.VHD
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/EXECUTE.VHD
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/DMEMORY.VHD
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/seg7.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/gpio.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/bt_prescaler.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/bt_counter.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/bt_output_unit.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/bt_capture.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/bt_regs.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/BasicTimer.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/intr_ctrl.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/bus_interface.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/cdc_sync.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/divider.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/div_stall_ctrl.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/intr_fsm.vhd
+set_global_assignment -name VHDL_FILE ../Submission/DUT/RV32IMscMCU/RV32I_CORE.vhd
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
+set_global_assignment -name VHDL_INPUT_VERSION VHDL_2008
+set_global_assignment -name VHDL_SHOW_LMF_MAPPING_MESSAGES OFF
+set_location_assignment PIN_Y2 -to clk_i
+set_location_assignment PIN_M23 -to rst_i
+set_location_assignment PIN_AB28 -to SW_i[0]
+set_location_assignment PIN_AC28 -to SW_i[1]
+set_location_assignment PIN_AC27 -to SW_i[2]
+set_location_assignment PIN_AD27 -to SW_i[3]
+set_location_assignment PIN_AB27 -to SW_i[4]
+set_location_assignment PIN_AC26 -to SW_i[5]
+set_location_assignment PIN_AD26 -to SW_i[6]
+set_location_assignment PIN_AB26 -to SW_i[7]
+set_location_assignment PIN_G19 -to LEDR_o[0]
+set_location_assignment PIN_F19 -to LEDR_o[1]
+set_location_assignment PIN_E19 -to LEDR_o[2]
+set_location_assignment PIN_F21 -to LEDR_o[3]
+set_location_assignment PIN_F18 -to LEDR_o[4]
+set_location_assignment PIN_E18 -to LEDR_o[5]
+set_location_assignment PIN_J19 -to LEDR_o[6]
+set_location_assignment PIN_H19 -to LEDR_o[7]
+set_location_assignment PIN_G18 -to HEX0_o[0]
+set_location_assignment PIN_F22 -to HEX0_o[1]
+set_location_assignment PIN_E17 -to HEX0_o[2]
+set_location_assignment PIN_L26 -to HEX0_o[3]
+set_location_assignment PIN_L25 -to HEX0_o[4]
+set_location_assignment PIN_J22 -to HEX0_o[5]
+set_location_assignment PIN_H22 -to HEX0_o[6]
+set_location_assignment PIN_M24 -to HEX1_o[0]
+set_location_assignment PIN_Y22 -to HEX1_o[1]
+set_location_assignment PIN_W21 -to HEX1_o[2]
+set_location_assignment PIN_W22 -to HEX1_o[3]
+set_location_assignment PIN_W25 -to HEX1_o[4]
+set_location_assignment PIN_U23 -to HEX1_o[5]
+set_location_assignment PIN_U24 -to HEX1_o[6]
+set_location_assignment PIN_AA25 -to HEX2_o[0]
+set_location_assignment PIN_AA26 -to HEX2_o[1]
+set_location_assignment PIN_Y25 -to HEX2_o[2]
+set_location_assignment PIN_W26 -to HEX2_o[3]
+set_location_assignment PIN_Y26 -to HEX2_o[4]
+set_location_assignment PIN_W27 -to HEX2_o[5]
+set_location_assignment PIN_W28 -to HEX2_o[6]
+set_location_assignment PIN_V21 -to HEX3_o[0]
+set_location_assignment PIN_U21 -to HEX3_o[1]
+set_location_assignment PIN_AB20 -to HEX3_o[2]
+set_location_assignment PIN_AA21 -to HEX3_o[3]
+set_location_assignment PIN_AD24 -to HEX3_o[4]
+set_location_assignment PIN_AF23 -to HEX3_o[5]
+set_location_assignment PIN_Y19 -to HEX3_o[6]
+set_location_assignment PIN_AB19 -to HEX4_o[0]
+set_location_assignment PIN_AA19 -to HEX4_o[1]
+set_location_assignment PIN_AG21 -to HEX4_o[2]
+set_location_assignment PIN_AH21 -to HEX4_o[3]
+set_location_assignment PIN_AE19 -to HEX4_o[4]
+set_location_assignment PIN_AF19 -to HEX4_o[5]
+set_location_assignment PIN_AE18 -to HEX4_o[6]
+set_location_assignment PIN_AD18 -to HEX5_o[0]
+set_location_assignment PIN_AC18 -to HEX5_o[1]
+set_location_assignment PIN_AB18 -to HEX5_o[2]
+set_location_assignment PIN_AH19 -to HEX5_o[3]
+set_location_assignment PIN_AG19 -to HEX5_o[4]
+set_location_assignment PIN_AF18 -to HEX5_o[5]
+set_location_assignment PIN_AH18 -to HEX5_o[6]
+set_location_assignment PIN_M21 -to PB_i[0]
+set_location_assignment PIN_N21 -to PB_i[1]
+set_location_assignment PIN_R24 -to PB_i[2]
+set_location_assignment PIN_AE15 -to pwm_o
+set_instance_assignment -name VIRTUAL_PIN ON -to pc_o
+set_instance_assignment -name VIRTUAL_PIN ON -to instruction_o
+set_instance_assignment -name VIRTUAL_PIN ON -to RegWrite_ctrl_o
+set_instance_assignment -name VIRTUAL_PIN ON -to MemWrite_ctrl_o
+set_instance_assignment -name VIRTUAL_PIN ON -to Branch_ctrl_o
+set_instance_assignment -name VIRTUAL_PIN ON -to read_data1_o
+set_instance_assignment -name VIRTUAL_PIN ON -to read_data2_o
+set_instance_assignment -name VIRTUAL_PIN ON -to write_data_o
+set_instance_assignment -name VIRTUAL_PIN ON -to alu_res_o
+set_instance_assignment -name VIRTUAL_PIN ON -to brTaken_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dtcm_addr_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dtcm_data_wr_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dtcm_data_rd_o
+set_instance_assignment -name VIRTUAL_PIN ON -to mclk_cnt_o
+set_instance_assignment -name VIRTUAL_PIN ON -to btifg_o
+set_instance_assignment -name VIRTUAL_PIN ON -to intr_o
+set_global_assignment -name SDC_FILE Quartus/RV32IMscMCU/RV32I_CORE.sdc
+set_global_assignment -name OPTIMIZATION_MODE BALANCED
+set_global_assignment -name ENABLE_SIGNALTAP OFF
+set_global_assignment -name USE_SIGNALTAP_FILE stp_tot.stp
+set_global_assignment -name SIGNALTAP_FILE stp_tot.stp
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

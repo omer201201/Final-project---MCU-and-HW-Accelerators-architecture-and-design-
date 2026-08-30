@@ -1,0 +1,814 @@
+<title>Final Report — RV32IM MCU</title>
+<style>
+  :root{
+    --ink:#14171c; --muted:#5b6472; --line:#c9d0da; --line2:#e4e9f0;
+    --bg:#ffffff; --panel:#f6f8fb; --accent:#1b4f8a; --accent2:#0d7a5f;
+    --warn:#8a5a00;
+  }
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:12pt/1.5 "Segoe UI",Calibri,Arial,sans-serif;
+    max-width:210mm; margin:0 auto; padding:0 14mm 20mm;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  h1,h2,h3{color:var(--accent); line-height:1.25; margin:1.6em 0 .5em}
+  h1{font-size:20pt} h2{font-size:15pt; border-bottom:2px solid var(--line); padding-bottom:.25em}
+  h3{font-size:12.5pt; color:var(--ink)}
+  p{margin:.6em 0} ul,ol{margin:.5em 0 .5em 1.3em; padding:0} li{margin:.25em 0}
+  code,kbd{font-family:Consolas,"Courier New",monospace; font-size:.9em;
+    background:var(--panel); border:1px solid var(--line2); border-radius:3px; padding:0 .25em}
+  pre{background:var(--panel); border:1px solid var(--line2); border-left:3px solid var(--accent);
+    border-radius:4px; padding:.7em .9em; overflow-x:auto; font-family:Consolas,monospace;
+    font-size:9.5pt; line-height:1.45; margin:.8em 0}
+  table{border-collapse:collapse; width:100%; margin:.8em 0; font-size:10pt}
+  th,td{border:1px solid var(--line); padding:.38em .55em; text-align:left; vertical-align:top}
+  th{background:var(--panel); font-weight:600; color:var(--accent)}
+  td.n,th.n{text-align:right; font-variant-numeric:tabular-nums}
+  caption{caption-side:bottom; font-size:9.5pt; color:var(--muted); padding-top:.5em; text-align:left}
+  figure{margin:1.1em 0; page-break-inside:avoid}
+  figure img{width:100%; border:1px solid var(--line); border-radius:3px; display:block}
+  figcaption{font-size:9.5pt; color:var(--muted); padding-top:.45em}
+  .fnum{font-weight:600; color:var(--ink)}
+  .note{background:var(--panel); border-left:3px solid var(--accent2);
+    padding:.6em .9em; margin:.9em 0; font-size:10.5pt}
+  .warn{border-left-color:var(--warn)}
+  .cover{text-align:center; padding:38mm 0 0}
+  .cover h1{font-size:26pt; border:0; margin-bottom:.1em}
+  .cover .sub{font-size:13pt; color:var(--muted); margin-bottom:2.5em}
+  .cover .meta{display:inline-block; text-align:left; font-size:12pt; line-height:2}
+  .toc{font-size:11pt} .toc li{margin:.15em 0}
+  .pb{page-break-before:always}
+  .kv{font-size:10.5pt} .kv td{border:0; padding:.15em .8em .15em 0}
+  .ok{color:var(--accent2); font-weight:600}
+  @page{margin:16mm}
+  @media print{ body{padding:0; max-width:none} a{color:inherit; text-decoration:none} }
+</style>
+
+<div class="cover">
+  <h1>RV32IM-Based MCU</h1>
+  <div class="sub">Single-Cycle Core with GPIO, Basic Timer, Interrupt Controller<br>and a Clock-Decoupled Division Accelerator</div>
+  <table class="meta">
+    <tr><td><b>Course</b></td><td>Advanced CPU Architecture &amp; Hardware Accelerators Lab 361-1-4693</td></tr>
+    <tr><td><b>Institution</b></td><td>Ben-Gurion University of the Negev</td></tr>
+    <tr><td><b>Submitters</b></td><td>Omer — 208838417 &nbsp;·&nbsp; Ilay — 209128677</td></tr>
+    <tr><td><b>Target</b></td><td>Altera DE2-115 — Cyclone IV E EP4CE115F29C7</td></tr>
+    <tr><td><b>Toolchain</b></td><td>Quartus Prime Lite 21.1 · ModelSim (VHDL-2008) · RARS</td></tr>
+    <tr><td><b>Date</b></td><td>30 August 2026</td></tr>
+  </table>
+</div>
+
+<div class="pb"></div>
+
+<h2>Contents</h2>
+<ol class="toc">
+  <li>Introduction and system overview</li>
+  <li>Architecture
+    <ol><li>Top-level block diagram</li><li>Top-level interface</li><li>RTL Viewer</li><li>Memory map and interrupt vectors</li><li>Clock domains</li></ol></li>
+  <li>HDL source files</li>
+  <li>Design decisions</li>
+  <li>Functional verification (ModelSim)</li>
+  <li>Hardware validation (ISMCE and Signal-Tap)</li>
+  <li>PPA characterization</li>
+  <li>Findings</li>
+  <li>Conclusions</li>
+</ol>
+
+<h2>1. Introduction and system overview</h2>
+
+<p>This report documents the design, verification and characterization of an
+RV32IM-based microcontroller implemented on an Altera DE2-115 board. The CPU is a
+single-cycle RV32IM core in a Harvard organisation, with separate 8&nbsp;KiB tightly
+coupled memories for instructions (ITCM) and data (DTCM), both realised in M9K
+block RAM.</p>
+
+<p>Around the core sits a memory-mapped peripheral set — GPIO driving the LEDs and
+the six seven-segment displays, a Basic Timer with compare, PWM and input-capture
+modes, and an interrupt controller with a prioritised vector table. Integer division
+is offloaded to a dedicated accelerator that runs in a second, faster clock domain,
+with every crossing between the two domains protected by two-flip-flop synchronisers.</p>
+
+<p>The whole design was verified in three independent ways: against a RARS golden
+model in simulation, against the same golden model on hardware through the In-System
+Memory Content Editor, and behaviourally through Signal-Tap traces captured on the
+board. All three agree.</p>
+
+<table>
+  <tr><th>Property</th><th>Value</th></tr>
+  <tr><td>ISA</td><td>RV32IM, single-cycle</td></tr>
+  <tr><td>CPU clock (MCLK)</td><td>25 MHz (PLL c0 from the 50 MHz board oscillator)</td></tr>
+  <tr><td>Accelerator clock (DIVCLK)</td><td>150 MHz (PLL c1) — six times MCLK</td></tr>
+  <tr><td>ITCM / DTCM</td><td>8 KiB each, M9K, runtime-modifiable over JTAG</td></tr>
+  <tr><td>Peripherals</td><td>GPIO, Basic Timer, interrupt controller</td></tr>
+  <tr><td>Achieved f<sub>max</sub></td><td>25.84 MHz (MCLK) · 199.6 MHz (DIVCLK)</td></tr>
+  <tr><td>Area</td><td>4,056 logic elements (4 % of the device), 1,905 registers</td></tr>
+  <tr><td>IPC (RV32IM/test1)</td><td>0.798 — identical in simulation and in silicon</td></tr>
+  <caption><b>Table 1.</b> System summary.</caption>
+</table>
+
+<div class="pb"></div>
+<h2>2. Architecture</h2>
+
+<h3>2.1 Top-level block diagram</h3>
+
+<figure>
+<svg viewBox="0 0 980 650" xmlns="http://www.w3.org/2000/svg" style="width:100%;border:1px solid #c9d0da;border-radius:3px;background:#fff">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6472"/>
+    </marker>
+    <style>
+      .b{fill:#f6f8fb;stroke:#1b4f8a;stroke-width:1.4}
+      .b2{fill:#fff;stroke:#5b6472;stroke-width:1.1}
+      .grp{fill:none;stroke:#1b4f8a;stroke-width:1.6}
+      .grpd{fill:none;stroke:#0d7a5f;stroke-width:1.6;stroke-dasharray:7 4}
+      .t{font:12px "Segoe UI",Arial;fill:#14171c;text-anchor:middle}
+      .ts{font:10px "Segoe UI",Arial;fill:#5b6472;text-anchor:middle}
+      .tl{font:bold 12px "Segoe UI",Arial;fill:#1b4f8a}
+      .tg{font:bold 12px "Segoe UI",Arial;fill:#0d7a5f}
+      .w{stroke:#5b6472;stroke-width:1.3;fill:none;marker-end:url(#a)}
+      .wl{font:10px "Segoe UI",Arial;fill:#5b6472}
+    </style>
+  </defs>
+
+  <!-- clocking -->
+  <rect class="b2" x="24" y="24" width="120" height="42" rx="4"/>
+  <text class="t" x="84" y="43">CLOCK_50</text><text class="ts" x="84" y="58">clk_i · 50 MHz</text>
+  <path class="w" d="M144,45 H196"/>
+  <rect class="b" x="198" y="24" width="120" height="42" rx="4"/>
+  <text class="t" x="258" y="43">PLL</text><text class="ts" x="258" y="58">altpll</text>
+  <path class="w" d="M318,36 H400"/><text class="wl" x="326" y="31">MCLK 25 MHz</text>
+  <path class="w" d="M318,56 H400"/><text class="wl" x="326" y="72">DIVCLK 150 MHz</text>
+  <rect class="b2" x="700" y="24" width="256" height="42" rx="4"/>
+  <text class="t" x="828" y="43">KEY0 → reset · KEY1-3 → interrupt sources</text>
+  <text class="ts" x="828" y="58">active-low on the board, inverted internally</text>
+
+  <!-- CPU core -->
+  <rect class="grp" x="24" y="100" width="574" height="262" rx="6"/>
+  <text class="tl" x="36" y="120">RV32IM single-cycle core — MCLK domain</text>
+
+  <rect class="b" x="42" y="134" width="126" height="60" rx="4"/>
+  <text class="t" x="105" y="158">IFETCH</text><text class="ts" x="105" y="176">PC · ITCM 8 KiB</text>
+
+  <rect class="b" x="184" y="134" width="112" height="60" rx="4"/>
+  <text class="t" x="240" y="158">CONTROL</text><text class="ts" x="240" y="176">decoder</text>
+
+  <rect class="b" x="312" y="134" width="126" height="60" rx="4"/>
+  <text class="t" x="375" y="158">IDECODE</text><text class="ts" x="375" y="176">RF 32×32 · imm</text>
+
+  <rect class="b" x="454" y="134" width="126" height="60" rx="4"/>
+  <text class="t" x="517" y="158">EXECUTE</text><text class="ts" x="517" y="176">ALU · MUL</text>
+
+  <rect class="b" x="42" y="228" width="126" height="60" rx="4"/>
+  <text class="t" x="105" y="252">DMEMORY</text><text class="ts" x="105" y="270">DTCM 8 KiB</text>
+
+  <rect class="b" x="184" y="228" width="112" height="60" rx="4"/>
+  <text class="t" x="240" y="252">intr_fsm</text><text class="ts" x="240" y="270">2-cycle service</text>
+
+  <rect class="b" x="312" y="228" width="126" height="60" rx="4"/>
+  <text class="t" x="375" y="252">div_stall_ctrl</text><text class="ts" x="375" y="270">DIVENA · stall</text>
+
+  <rect class="b" x="454" y="228" width="126" height="60" rx="4"/>
+  <text class="t" x="517" y="252">mclk_cnt</text><text class="ts" x="517" y="270">cycle counter</text>
+
+  <path class="w" d="M168,164 H182"/><path class="w" d="M296,164 H310"/><path class="w" d="M438,164 H452"/>
+  <path class="w" d="M105,194 V226"/>
+  <text class="ts" x="311" y="330">structural top level: RV32I_CORE.vhd</text>
+
+  <!-- peripherals -->
+  <rect class="grp" x="628" y="100" width="328" height="262" rx="6"/>
+  <text class="tl" x="640" y="120">bus_interface — SFR 0x2000–0x3FFC</text>
+
+  <rect class="b" x="646" y="134" width="140" height="60" rx="4"/>
+  <text class="t" x="716" y="158">gpio</text><text class="ts" x="716" y="176">+ 6 × seg7</text>
+
+  <rect class="b" x="800" y="134" width="140" height="60" rx="4"/>
+  <text class="t" x="870" y="158">BasicTimer</text><text class="ts" x="870" y="176">compare·PWM·capture</text>
+
+  <rect class="b" x="646" y="228" width="294" height="60" rx="4"/>
+  <text class="t" x="793" y="252">intr_ctrl</text><text class="ts" x="793" y="270">IE · IFG · TYPE · priority encoder</text>
+
+  <path class="w" d="M598,180 H626"/><text class="wl" x="600" y="172">bus</text>
+  <path class="w" d="M644,258 H600 V288 H296"/><text class="wl" x="440" y="303">INTR</text>
+  <path class="w" d="M240,226 V208 H612 V246 H644"/><text class="wl" x="440" y="204">INTA · TYPE</text>
+
+  <!-- accelerator -->
+  <rect class="grpd" x="24" y="396" width="574" height="140" rx="6"/>
+  <text class="tg" x="36" y="416">Division accelerator — DIVCLK domain (150 MHz)</text>
+
+  <rect class="b" x="42" y="430" width="176" height="72" rx="4"/>
+  <text class="t" x="130" y="454">cdc_sync × 4</text><text class="ts" x="130" y="472">2-FF synchronisers</text><text class="ts" x="130" y="488">(Figure 10b)</text>
+
+  <rect class="b" x="240" y="430" width="176" height="72" rx="4"/>
+  <text class="t" x="328" y="454">divider</text><text class="ts" x="328" y="472">32-cycle sequential</text><text class="ts" x="328" y="488">Quotient · Residue</text>
+
+  <path class="w" d="M375,290 V422 H236"/><text class="wl" x="386" y="360">operands · DIVENA</text>
+  <path class="w" d="M218,466 H236"/>
+  <path class="w" d="M440,466 H470 V300"/><text class="wl" x="450" y="360">DIVBUSY · result</text>
+  <text class="ts" x="311" y="522">CPU stalls; PC frozen until synchronised DIVBUSY drops</text>
+
+  <!-- board IO -->
+  <rect class="grp" x="628" y="396" width="328" height="140" rx="6"/>
+  <text class="tl" x="640" y="416">Board I/O</text>
+  <text class="t" x="792" y="446">LEDR[7:0] · HEX0–HEX5</text>
+  <text class="t" x="792" y="472">SW[7:0] · KEY[3:1]</text>
+  <text class="t" x="792" y="498">GPIO[9] = PWM out (PIN_AE15)</text>
+  <path class="w" d="M786,164 H700 M786,164 H830 M792,194 V394"/>
+
+  <!-- footer note -->
+  <text class="ts" x="490" y="580">All MCLK↔DIVCLK crossings pass through cdc_sync; the two domains are declared</text>
+  <text class="ts" x="490" y="598">asynchronous in the SDC, and the handshake keeps the operands stable across the boundary.</text>
+</svg>
+<figcaption><span class="fnum">Figure 1.</span> Top-level block diagram. The MCLK domain holds the
+single-cycle core and the memory-mapped peripherals; the divider runs in the DIVCLK domain and is
+reached only through two-flip-flop synchronisers.</figcaption>
+</figure>
+
+<h3>2.2 Top-level interface</h3>
+
+<table>
+  <tr><th>Port</th><th>Dir</th><th>Width</th><th>Description</th></tr>
+  <tr><td colspan="4" style="background:#eef2f7"><b>Clock and reset</b></td></tr>
+  <tr><td><code>clk_i</code></td><td>in</td><td class="n">1</td><td>CLOCK_50, the 50 MHz board oscillator; feeds the PLL</td></tr>
+  <tr><td><code>rst_i</code></td><td>in</td><td class="n">1</td><td>KEY0. Active-low on the board and inverted internally, since the design uses an active-high reset</td></tr>
+  <tr><td colspan="4" style="background:#eef2f7"><b>Board I/O (memory-mapped)</b></td></tr>
+  <tr><td><code>SW_i</code></td><td>in</td><td class="n">8</td><td>Slide switches, read through the GPIO block</td></tr>
+  <tr><td><code>PB_i</code></td><td>in</td><td class="n">3</td><td>KEY1–KEY3; also the three pushbutton interrupt sources</td></tr>
+  <tr><td><code>LEDR_o</code></td><td>out</td><td class="n">8</td><td>Red LEDs</td></tr>
+  <tr><td><code>HEX0_o</code>…<code>HEX5_o</code></td><td>out</td><td class="n">7 each</td><td>The six seven-segment displays, driven through <code>seg7</code></td></tr>
+  <tr><td><code>pwm_o</code></td><td>out</td><td class="n">1</td><td>Basic Timer PWM output, assigned to GPIO[9] (PIN_AE15)</td></tr>
+  <tr><td colspan="4" style="background:#eef2f7"><b>Observation outputs</b> — mapped to virtual pins, used by the testbench and Signal-Tap</td></tr>
+  <tr><td><code>pc_o</code></td><td>out</td><td class="n">13</td><td>Program counter. Also how the testbench measures stalls: a stall is a cycle in which the PC is held</td></tr>
+  <tr><td><code>instruction_o</code></td><td>out</td><td class="n">32</td><td>Fetched instruction</td></tr>
+  <tr><td><code>mclk_cnt_o</code></td><td>out</td><td class="n">16</td><td>Free-running MCLK cycle counter — the hardware side of the IPC measurement</td></tr>
+  <tr><td><code>RegWrite_ctrl_o</code>, <code>MemWrite_ctrl_o</code>, <code>Branch_ctrl_o</code>, <code>brTaken_o</code></td><td>out</td><td class="n">1 each</td><td>Control strobes from the decoder and the branch unit</td></tr>
+  <tr><td><code>read_data1_o</code>, <code>read_data2_o</code>, <code>write_data_o</code></td><td>out</td><td class="n">32 each</td><td>Register-file read and write ports</td></tr>
+  <tr><td><code>alu_res_o</code></td><td>out</td><td class="n">32</td><td>ALU result</td></tr>
+  <tr><td><code>dtcm_addr_o</code>, <code>dtcm_data_wr_o</code>, <code>dtcm_data_rd_o</code></td><td>out</td><td class="n">13 / 32 / 32</td><td>Data-memory address and data buses</td></tr>
+  <tr><td><code>btifg_o</code>, <code>intr_o</code></td><td>out</td><td class="n">1 each</td><td>Basic Timer interrupt flag and the interrupt request to the CPU</td></tr>
+  <caption><b>Table 2.</b> Top-level ports of <code>RV32I_CORE</code>. Only the clock, reset and the
+  board I/O consume real device pads — 64 pins. The observation outputs carry
+  <code>VIRTUAL_PIN</code> assignments, which is why the Fitter reports 64 real and 270 virtual pins:
+  they exist so the testbench and Signal-Tap can watch internal state without the design demanding
+  334 pads on a 256-pad-usable package.</caption>
+</table>
+
+<p>The design is further parameterised by generics defaulted from
+<code>cond_compilation_package</code>: <code>MODELSIM</code> selects the simulation or FPGA build,
+<code>WORD_GRANULARITY</code> selects word- or byte-addressing, the four width generics set the
+memory geometry, and <code>CLK_CNT_WIDTH</code> = 16 sizes the cycle counter.</p>
+
+<h3>2.3 RTL Viewer</h3>
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_RTL.png" alt="RTL Viewer">
+  <figcaption><span class="fnum">Figure 2.</span> Quartus RTL Viewer of the elaborated top level,
+  confirming the structural instantiation of the core, the bus interface, the interrupt FSM, the
+  accelerator with its synchronisers, and the PLL.</figcaption>
+</figure>
+
+<h3>2.4 Memory map and interrupt vectors</h3>
+
+<p>The address decode is partial: only bits 15:14:13 are examined to distinguish DTCM
+from the peripheral window, so the 64-byte SFR block aliases repeatedly across
+<code>0x2000–0x3FFF</code>. This is deliberate — the decode sits on the critical path that gates
+the DTCM write enable, and a full comparison there would cost frequency.</p>
+
+<table>
+  <tr><th>Region</th><th>Address</th><th>Contents</th></tr>
+  <tr><td>DTCM</td><td><code>0x0000–0x1FFC</code></td><td>data memory, 8 KiB; the interrupt vector table occupies the first 32 bytes</td></tr>
+  <tr><td>GPIO</td><td><code>0x2004–0x200D</code></td><td>LEDR, HEX0–HEX5, SW, pushbuttons</td></tr>
+  <tr><td>Basic Timer</td><td><code>0x201C–0x2028</code></td><td>BTCTL1, BTCTL2, BTCMPR0/1, BTCAPR</td></tr>
+  <tr><td>Interrupt controller</td><td><code>0x202C–0x202E</code></td><td>IE, IFG, TYPE</td></tr>
+  <caption><b>Table 3.</b> Memory map.</caption>
+</table>
+
+<table>
+  <tr><th>Source</th><th>Flag</th><th class="n">TYPE</th><th>Priority</th><th>Vector word</th></tr>
+  <tr><td>Reset</td><td>—</td><td class="n">00h</td><td>—</td><td>DTCM[0]</td></tr>
+  <tr><td>UART error / RX / TX</td><td>—</td><td class="n">04–0Ch</td><td>1–3</td><td>DTCM[1..3]</td></tr>
+  <tr><td>Basic Timer</td><td>BTIFG</td><td class="n">10h</td><td>4</td><td>DTCM[4]</td></tr>
+  <tr><td>Pushbutton 1</td><td>KEY1</td><td class="n">14h</td><td>5</td><td>DTCM[5]</td></tr>
+  <tr><td>Pushbutton 2</td><td>KEY2</td><td class="n">18h</td><td>6</td><td>DTCM[6]</td></tr>
+  <tr><td>Pushbutton 3</td><td>KEY3</td><td class="n">1Ch</td><td>7 (lowest)</td><td>DTCM[7]</td></tr>
+  <caption><b>Table 4.</b> Interrupt vector table. TYPE is emitted already multiplied by four, so it
+  is directly the byte address of the vector entry and the CPU's emulated <code>lw Mem[TYPE]</code>
+  needs no shift.</caption>
+</table>
+
+<h3>2.5 Clock domains</h3>
+
+<p>The PLL produces two clocks from the 50 MHz oscillator: MCLK at 25 MHz for the CPU and
+peripherals, and DIVCLK at 150 MHz for the divider. Three signals cross from MCLK into
+DIVCLK (the two 32-bit operands and the DIVENA start pulse) and one crosses back
+(DIVBUSY); all four pass through <code>cdc_sync</code>, the two-flip-flop structure of the
+project definition's Figure 10b.</p>
+
+<p>The quotient and residue cross back unsynchronised, which is safe by construction:
+<code>div_stall_ctrl</code> holds the CPU stalled until the <em>synchronised</em> DIVBUSY has
+dropped, so the result buses have long settled before the CPU samples them. This is the
+standard "synchronise the control, let the settled data cross" handshake, and it is why the
+SDC declares the two domains asynchronous — timing them against one another would report
+violations that the synchronisers exist precisely to make irrelevant.</p>
+
+<div class="pb"></div>
+<h2>3. HDL source files</h2>
+
+<table>
+  <tr><th>File</th><th>Description</th></tr>
+  <tr><td colspan="2" style="background:#eef2f7"><b>Packages</b></td></tr>
+  <tr><td><code>cond_compilation_package.vhd</code></td><td>Conditional-compilation constants: ModelSim vs Quartus selection, memory geometry, and the two PLL ratios (MCLK and DIVCLK).</td></tr>
+  <tr><td><code>const_package.vhd</code></td><td>ISA constants — opcodes, funct3/funct7, ALU operation codes. Uses VHDL-2008 sized bit-string literals.</td></tr>
+  <tr><td><code>aux_package.vhd</code></td><td>Component declarations for every entity in the design.</td></tr>
+  <tr><td colspan="2" style="background:#eef2f7"><b>CPU core</b></td></tr>
+  <tr><td><code>RV32I_CORE.vhd</code></td><td>Structural top level. Instantiates the core stages, bus interface, interrupt FSM, accelerator with its synchronisers, and the PLL. Holds the reset-polarity select and the MCLK cycle counter.</td></tr>
+  <tr><td><code>IFETCH.VHD</code></td><td>Program counter, 8 KiB ITCM (altsyncram), and next-PC select for sequential, branch, jal, jalr and interrupt-vector fetch. ITCM is runtime-modifiable (ISMCE).</td></tr>
+  <tr><td><code>IDECODE.VHD</code></td><td>32×32 register file, immediate generation for all formats, and the register-file write override used by the interrupt service protocol (tp, and GIE in gp[0]).</td></tr>
+  <tr><td><code>CONTROL.VHD</code></td><td>Main decoder: ALU operation, branch, jump, memory and register-write control.</td></tr>
+  <tr><td><code>EXECUTE.VHD</code></td><td>ALU, branch condition evaluation, and the RV32M multiplier (four embedded 9-bit multipliers).</td></tr>
+  <tr><td><code>DMEMORY.VHD</code></td><td>8 KiB DTCM (altsyncram), clocked on the falling edge of MCLK per Figure 3. Runtime-modifiable (ISMCE).</td></tr>
+  <tr><td colspan="2" style="background:#eef2f7"><b>Memory-mapped I/O</b></td></tr>
+  <tr><td><code>bus_interface.vhd</code></td><td>SFR address decode, peripheral chip selects, write-strobe distribution, and the read-data multiplexer back to the CPU.</td></tr>
+  <tr><td><code>gpio.vhd</code></td><td>LEDR, the six HEX registers, and the SW / pushbutton inputs at their SFR addresses.</td></tr>
+  <tr><td><code>seg7.vhd</code></td><td>Binary-to-seven-segment decoder, instantiated six times through a generate statement.</td></tr>
+  <tr><td colspan="2" style="background:#eef2f7"><b>Basic Timer</b></td></tr>
+  <tr><td><code>BasicTimer.vhd</code></td><td>Structural top of the timer; exposes the control-register bit fields as named aliases and registers the interrupt event so no combinational glitch can clock a phantom BTIFG.</td></tr>
+  <tr><td><code>bt_prescaler.vhd</code></td><td>BTSSEL divider, implemented as a clock enable rather than a clock multiplexer.</td></tr>
+  <tr><td><code>bt_counter.vhd</code></td><td>BTCNT up-counter and the two compares against BTCL0 / BTCL1 producing EUQ0 and EUQ1.</td></tr>
+  <tr><td><code>bt_output_unit.vhd</code></td><td>PWM output: set on EUQ1, reset on EUQ0 (Figure 8, Mode 0).</td></tr>
+  <tr><td><code>bt_capture.vhd</code></td><td>Input capture: CAPISEL source multiplexer, two-flop synchroniser, edge detection per CAPMD, and the latch of BTCNT into BTCAPR.</td></tr>
+  <tr><td><code>bt_regs.vhd</code></td><td>Timer register file: BTCTL1/2, BTCMPR0/1 with their latched shadows BTCL0/BTCL1, and BTCAPR.</td></tr>
+  <tr><td colspan="2" style="background:#eef2f7"><b>Interrupt subsystem</b></td></tr>
+  <tr><td><code>intr_ctrl.vhd</code></td><td>IE, IFG and TYPE registers, the pending term IFG∧IE, the priority encoder, and the INTR output.</td></tr>
+  <tr><td><code>intr_fsm.vhd</code></td><td>The CPU-side two-cycle service protocol of page 15: clear GIE, acknowledge, capture TYPE, clear the source flag, and emulate the vector load and jalr with tp holding the return address.</td></tr>
+  <tr><td colspan="2" style="background:#eef2f7"><b>Accelerator</b></td></tr>
+  <tr><td><code>divider.vhd</code></td><td>32-cycle sequential divider producing Quotient and Residue, running in DIVCLK.</td></tr>
+  <tr><td><code>div_stall_ctrl.vhd</code></td><td>Detects div/rem, raises DIVENA, and freezes the PC until the synchronised DIVBUSY drops.</td></tr>
+  <tr><td><code>cdc_sync.vhd</code></td><td>The two-flip-flop CDC synchroniser of Figure 10b, instantiated four times. Carries an <code>AUTO_SHIFT_REGISTER_RECOGNITION OFF</code> attribute — see §8.</td></tr>
+  <tr><td colspan="2" style="background:#eef2f7"><b>Clocking</b></td></tr>
+  <tr><td><code>PLL.vhd</code></td><td>altpll wrapper: c0 = MCLK (25 MHz), c1 = DIVCLK (150 MHz).</td></tr>
+  <caption><b>Table 5.</b> The 24 design source files.</caption>
+</table>
+
+<div class="pb"></div>
+<h2>4. Design decisions</h2>
+
+<h3>4.1 BTSSEL as a clock enable, not a clock multiplexer</h3>
+<p>Figure 7 draws BTSSEL as a 4:1 multiplexer selecting between clock sources. Implemented
+literally on an FPGA this produces a derived clock off the global network, which fragments
+the clock tree and makes f<sub>max</sub> unreportable. <code>bt_prescaler</code> instead
+generates a single-cycle <em>tick</em> enable at the selected rate, and BTCNT advances on
+that enable. The behaviour is identical; the implementation stays synthesis-clean and the
+whole timer remains in one analysable clock domain.</p>
+
+<h3>4.2 The divider in its own clock domain</h3>
+<p>A 32-cycle divider clocked at MCLK would stall the CPU for 32 cycles per operation. Running
+it at 150 MHz — six times MCLK — reduces that to <strong>8 MCLK cycles</strong>, measured. On
+RV32IM/test1, which performs sixteen divide-class operations, this is the difference between
+IPC 0.50 and IPC 0.80 with an identical retired-instruction count. DIVCLK was set to 150 MHz
+rather than higher to leave margin under the divider's standalone ceiling of ~195 MHz.</p>
+
+<h3>4.3 Registering the timer interrupt event</h3>
+<p>EUQ0 is combinational over signals that settle in different delta cycles, so it emitted
+glitches narrower than a clock period. Figure 13 uses that line to <em>clock</em> the IFG
+flip-flop, where such a glitch latches a phantom interrupt. The event is therefore registered
+inside <code>BasicTimer</code> before it leaves the block. This was found in simulation, where
+a timer interval measured 7 cycles instead of 80.</p>
+
+<h3>4.4 Stack pointer initialisation</h3>
+<p>The benchmarks ship without a C runtime startup, so <code>sp</code> reset to zero. A
+compiled program's locals then landed near <code>0xFFFFFFxx</code>, whose bits 15:14:13 are all
+'1' and are therefore decoded as <em>peripheral</em>: stack writes were discarded and stack
+reads returned an I/O port, so loop counters never advanced. <code>x2</code> is now reset to
+<code>0x2000</code>, the top of the DTCM. Hand-written assembly benchmarks never touch the
+stack, which is why this stayed hidden until the first compiled benchmark ran.</p>
+
+<h3>4.5 One testbench, many run scripts</h3>
+<p>The project definition names a single <code>tb_RV32IMscMCU.vhd</code>. Everything that
+differs between benchmarks — memory images, run length, board stimulus — therefore lives in
+the per-benchmark <code>.do</code> files, and the testbench leaves SW and the pushbuttons
+undriven for the script to force.</p>
+
+<h3>4.6 Producing the golden-model artefact</h3>
+<p>The DTCM is an altsyncram whose storage ModelSim ASE's <code>mem save</code> cannot reach.
+The testbench therefore mirrors the memory: it pre-loads a shadow array from the same image
+the hardware memory is initialised from, updates it on every committed store, and writes it
+out as <code>DTCM.mem</code> in the one-word-per-line format of the RARS golden file.</p>
+
+<h3>4.7 Measuring IPC without touching the architecture</h3>
+<p>A stall is, by definition, a cycle in which the PC is held. Since <code>pc_o</code> is
+already a top-level output, both IPC counters are accumulated in the <em>testbench</em> rather
+than in the design — no hardware counter was added and the architecture is unchanged. On
+hardware the existing <code>mclk_cnt_o</code> output serves the same purpose.</p>
+
+<div class="pb"></div>
+<h2>5. Functional verification (ModelSim)</h2>
+
+<h3>5.1 Golden-model comparison</h3>
+<p>Of the eight supplied benchmarks only RV32IM/test1 terminates, and it is correspondingly the
+only one shipping a RARS post-run reference — the interactive benchmarks sit in a state-machine
+loop forever, so there is no end-of-run state to dump. <code>run_rv32im_test1.do</code>
+performs the comparison automatically and reports <span class="ok">PASS on all 1024 DTCM
+words</span>. The remaining seven are verified behaviourally from their waveforms.</p>
+
+<h3>5.2 IPC</h3>
+<p>Following LAB5 clause 6.iii.b, referenced by steps 8.c.iii and 8.e.iii:</p>
+<pre>IPC = (CLKCNT_o − (STCNT_o + 4 + depth·FHCNT_o)) / CLKCNT_o
+    =  InstructionCounter / CLKCNT_o</pre>
+<p>A single-cycle core has no flushes and no pipeline fill, so this reduces to
+<code>IPC = (CLKCNT − STCNT) / CLKCNT</code>.</p>
+
+<table>
+  <tr><th>Benchmark</th><th class="n">CLKCNT</th><th class="n">STCNT</th><th class="n">Retired</th><th class="n">IPC</th></tr>
+  <tr><td>RV32IM/test1</td><td class="n">643</td><td class="n">130</td><td class="n">513</td><td class="n"><b>0.798</b></td></tr>
+  <tr><td>GPIO/test0</td><td class="n">19,992</td><td class="n">2</td><td class="n">19,990</td><td class="n">0.9999</td></tr>
+  <tr><td>Interrupt/test1</td><td class="n">7,852</td><td class="n">2</td><td class="n">7,850</td><td class="n">0.9997</td></tr>
+  <tr><td>Interrupt/test4</td><td class="n">7,852</td><td class="n">87</td><td class="n">7,765</td><td class="n">0.9889</td></tr>
+  <caption><b>Table 6.</b> IPC across benchmarks. RARS reports <b>513</b> instructions executed for
+  RV32IM/test1 and the hardware retired <b>513</b>, so both sides of the equation agree exactly and
+  the check passes.</caption>
+</table>
+
+<p>STCNT for test1 decomposes as sixteen stalling operations (eight <code>div</code>, eight
+<code>rem</code>) at 8 cycles each, plus two cycles of edge effects. With the divider clocked at
+MCLK the same program would need 32 cycles per operation, giving CLKCNT 1,027 and IPC 0.500.
+Because the retired-instruction count is identical in both cases, the improvement from 0.50 to
+0.80 is an exact comparison rather than an estimate.</p>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_rv32_test1_wholesystem.png" alt="rv32im test1 waveform">
+  <figcaption><span class="fnum">Figure 3.</span> RV32IM/test1 — the divider accelerator servicing
+  <code>rem a4,a4,a5</code> (<code>0x02F76733</code>). The CPU stalls for 8 MCLK cycles with the PC
+  held while the divider runs 32 cycles in the 150 MHz domain. <code>divbusy_raw_w</code> (DIVCLK)
+  leads <code>divbusy_w</code> (MCLK) by the two-flop synchroniser of Figure 10b, so this single
+  frame evidences Figures 9, 10a and 10b together.</figcaption>
+</figure>
+
+<h3>5.3 GPIO benchmarks</h3>
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_GPIO_test0_wholesystem.png" alt="GPIO test0">
+  <figcaption><span class="fnum">Figure 4.</span> GPIO/test0 — LEDR counts 0x46→0x4B and each HEX
+  digit is written in turn. The transitions are <em>staggered</em>, one per store to
+  0x2004/2005/2008/2009/200C/200D, so the memory-mapped write path is visible in program order.
+  IE = 000000 throughout: the free-running BTIFG is set but masked, which incidentally demonstrates
+  that the IE mask works and that no interrupt perturbed the measurement.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_GPIO_test1_wholesystem.png" alt="GPIO test1">
+  <figcaption><span class="fnum">Figure 5.</span> GPIO/test1 (SW = 0x01, counting up) — LEDR
+  0x18→0x2F and all six HEX digits display the <em>same</em> value, the low nibble of LEDR, wrapping
+  F→0.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_GPIO_test2_wholesystem.png" alt="GPIO test2">
+  <figcaption><span class="fnum">Figure 6.</span> GPIO/test2 (SW = 0x02, counting down) — LEDR
+  0xE0→0xAE and the HEX array now forms a genuine six-digit number: HEX0 decrements fastest, HEX1
+  steps only when HEX0 wraps, HEX2–5 hold. This same-digit versus multi-digit contrast with Figure 5
+  is the reason both benchmarks exist.</figcaption>
+</figure>
+
+<h3>5.4 Interrupt benchmarks</h3>
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_intr_test1_wholesystem.png" alt="intr test1">
+  <figcaption><span class="fnum">Figure 7.</span> Interrupt/test1 — a KEY1 interrupt serviced end to
+  end. IFG bit 3 sets on the press, the pending term passes the IE mask, INTR is raised and
+  acknowledged. During the two-cycle service the CPU clears GIE in hardware and latches TYPE = 14h
+  with return address 216; <code>reti</code> restores GIE and the PC resumes. The GIE bit going
+  <b>1 → 0 → 1</b> demonstrates spec notes (e) and (f) rather than asserting them.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_intr_test2_wholesystem.png" alt="intr test2">
+  <figcaption><span class="fnum">Figure 8.</span> Interrupt/test2 — vector dispatch. Three presses
+  drive TYPE through 14h / 18h / 1Ch with the return address changing each time, proving the priority
+  encoder and the vector table. The timer is configured BTCTL1 = 0x18 (SMCLK/8) with
+  BTCMPR0 = 2,500,000.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_intr_test3_wholesystem.png" alt="intr test3">
+  <figcaption><span class="fnum">Figure 9.</span> Interrupt/test3 — all four programmable intervals
+  in one frame. BTCL0 steps 2,500,000 → 1,250,000 → 625,000 → 312,500 as the keys are pressed,
+  matching the benchmark's specification exactly.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_intr_test4_wholesystem.png" alt="intr test4">
+  <figcaption><span class="fnum">Figure 10.</span> Interrupt/test4 — the richest single frame: three
+  subsystems and two vectors. BTCTL1 steps 40h → 26h → 02h and BTCTL2 00h → 07h → <b>06h</b>, the
+  software-generated capture edge; BTCL0 goes free-running and <b>BTCAPR latches 197</b>. In the same
+  window the divider runs and TYPE steps 18h → 1Ch → 10h.</figcaption>
+</figure>
+
+<div class="pb"></div>
+<h2>6. Hardware validation (ISMCE and Signal-Tap)</h2>
+
+<p>Both TCMs carry <code>ENABLE_RUNTIME_MOD</code>, so all eight benchmarks were run from a
+<em>single</em> compilation: the In-System Memory Content Editor writes each benchmark's ITCM
+and DTCM images over JTAG, and KEY0 restarts the program. This removes the per-benchmark
+recompile entirely.</p>
+
+<h3>6.1 RV32IM/test1 — golden model and IPC in silicon</h3>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/rv32im_test1_ST.png" alt="rv32im test1 Signal-Tap">
+  <figcaption><span class="fnum">Figure 11.</span> RV32IM/test1 captured on the board. The program
+  reaches its terminal loop at <code>pc_o = 0114h</code> holding <code>0000006Fh</code>
+  (<code>jal x0,0</code>), and <code>mclk_cnt_o</code> reads <b>0283h = 643</b> — identical to the
+  simulated cycle count. The same frame shows the accelerator: <code>02F76733h</code>
+  (<code>rem a4,a4,a5</code>) held at <code>pc_o = 00E0h</code> while the stall is asserted, then the
+  PC advancing one address per cycle the moment it drops. Note also <code>ie_reg = 00h</code> with
+  <code>ifg_reg = 04h</code>: the free-running BTIFG is set but correctly masked, so no interrupt
+  perturbed the cycle count.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/IISMCE_DTCM_rv32IM.png" alt="ISMCE DTCM readback">
+  <figcaption><span class="fnum">Figure 12.</span> ISMCE readback of the DTCM after the run,
+  compared word by word against the RARS <code>DTCM_golden.txt</code>: <span class="ok">exact
+  match</span>. Words 0–7 hold the first array 1…8, words 8–15 the second 8…1, then the computed
+  results. This satisfies step 8(e).i.</figcaption>
+</figure>
+
+<div class="note">
+<b>Simulation and silicon agree exactly.</b> Hardware 643 cycles = simulation 643 cycles =
+RARS 513 retired instructions, giving IPC 0.798 by both sides of the equation, and the DTCM
+contents match the golden model bit for bit.
+</div>
+
+<h3>6.2 Interrupt benchmarks on hardware</h3>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test1_ST.png" alt="intr test1 Signal-Tap">
+  <figcaption><span class="fnum">Figure 13.</span> Interrupt/test1 — the page-15 protocol in silicon.
+  <code>ifg_reg</code> 04h → 0Ch (KEY1 sets bit 3), TYPE = 14h latched into
+  <code>type_captured_q</code>, the PC frozen at 00F0h for <em>exactly two cycles</em> of service,
+  the vector fetch to 0178h, the ISR body, and <code>reti</code> returning to 00F0h. GIE
+  (<code>gp_o</code> bit 0) goes <b>1 → 0 → 1</b>.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test2_ST_KEY1.png" alt="intr test2 KEY1">
+  <figcaption><span class="fnum">Figure 14.</span> Interrupt/test2, KEY1 — TYPE = 14h with its own
+  return address.</figcaption>
+</figure>
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test2_ST_key2.png" alt="intr test2 KEY2">
+  <figcaption><span class="fnum">Figure 15.</span> Interrupt/test2, KEY2 — TYPE = 18h.</figcaption>
+</figure>
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test2_KEY3.png" alt="intr test2 KEY3">
+  <figcaption><span class="fnum">Figure 16.</span> Interrupt/test2, KEY3 — TYPE = 1Ch. Together with
+  the Basic Timer's own 10h, Figures 14–16 evidence the complete vector set. Here IE = 3Ch, so BTIE
+  is enabled and the timer interrupt also fires autonomously every BTCL0 ticks — visible as BTCNT
+  climbing to 2,500,000 and wrapping.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test3_ST.png" alt="intr test3 Signal-Tap">
+  <figcaption><span class="fnum">Figure 17.</span> Interrupt/test3 — BTCL0 = 0004C4B4h = 312,500,
+  the shortest programmed interval, with BTCNT reaching the compare value and wrapping. The longest
+  interval, 002625A0h = 2,500,000, was captured the same way. Simulation (Figure 9) shows all four
+  intervals; hardware confirms the extremes and the end-to-end behaviour.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test4_ST.png" alt="intr test4 input capture">
+  <figcaption><span class="fnum">Figure 18.</span> Interrupt/test4, input capture — four subsystems
+  in one frame. BTCTL2 goes 07h → <b>06h</b> (CAPISEL switching from GND to VCC, the
+  software-generated edge), <b>BTCAPR latches C5h = 197</b> — identical to the simulated value —
+  BTCL0 is FFFFFFFFh (free-running), and in the same window the divider stalls the CPU on
+  <code>02736E33h</code> (<code>rem t3,t1,t2</code>) at <code>pc_o = 04A0h</code>.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test4_PWM_rising.png" alt="PWM rising edge">
+  <figcaption><span class="fnum">Figure 19.</span> PWM set point. At the rising edge of the output,
+  BTCNT = <b>000003E8h = 1,000 = BTCL1</b> — the output sets at BTCL1, exactly as Figure 8 Mode 0
+  specifies. (The one-cycle offset is the output register inside
+  <code>bt_output_unit</code>.)</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test4_pwm_falling.png" alt="PWM falling edge">
+  <figcaption><span class="fnum">Figure 20.</span> PWM reset point. At the falling edge,
+  BTCNT = <b>00000FA0h = 4,000 = BTCL0</b>, after which the counter wraps to zero. Measuring both
+  switching points proves the duty by construction rather than asserting a ratio. Here BTCL1 has been
+  advanced to 000007D0h = 2,000 by a further KEY2 press, giving 50 % — the previous frame's BTCL1 of
+  1,000 gives 75 %.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/intr_test4_DTCM.png" alt="intr test4 DTCM readback">
+  <figcaption><span class="fnum">Figure 21.</span> ISMCE readback after Interrupt/test4. Words 0–7
+  are the vector table itself, readable in hex: DTCM[4] = 1F8h (Basic Timer), DTCM[5] = 138h (KEY1),
+  DTCM[6] = 178h (KEY2), DTCM[7] = 1B8h (KEY3) — matching the TYPE values captured in Figures 13–16.
+  Word 0x32 holds <b>C5h = 197</b>, the captured BTCNT value stored by the ISR, confirming the input
+  capture result through a third independent path.</figcaption>
+</figure>
+
+<table>
+  <tr><th>Quantity</th><th>Simulation</th><th>Hardware</th><th>Agreement</th></tr>
+  <tr><td>RV32IM/test1 cycle count</td><td class="n">643</td><td class="n">643</td><td class="ok">exact</td></tr>
+  <tr><td>RV32IM/test1 DTCM contents</td><td>1024/1024 vs RARS</td><td>matches RARS golden</td><td class="ok">exact</td></tr>
+  <tr><td>Interrupt vector set (TYPE)</td><td>10h/14h/18h/1Ch</td><td>10h/14h/18h/1Ch</td><td class="ok">exact</td></tr>
+  <tr><td>Service latency</td><td>2 cycles</td><td>2 cycles</td><td class="ok">exact</td></tr>
+  <tr><td>Input capture BTCAPR</td><td class="n">197</td><td class="n">197</td><td class="ok">exact</td></tr>
+  <tr><td>PWM switching points</td><td>BTCL1 / BTCL0</td><td>1,000 / 4,000</td><td class="ok">exact</td></tr>
+  <caption><b>Table 7.</b> Simulation versus silicon.</caption>
+</table>
+
+<div class="pb"></div>
+<h2>7. PPA characterization</h2>
+
+<p>All figures are post-Fitter for the final build with Signal-Tap disabled, slow 1200 mV 85 °C
+timing model, device EP4CE115F29C7. The <em>MCU with GPIO</em> row is derived from the Fitter's
+per-entity resource report of the full design (Figure 23) by removing the timer, interrupt
+subsystem, accelerator and its synchronisers; the GPIO-only variant was not built as a separate
+project. The pipelined variant was not attempted.</p>
+
+<h3>7.1 Area</h3>
+<table>
+  <tr><th></th><th class="n">Logic elements</th><th class="n">Registers</th><th class="n">I/O pins</th><th class="n">Memory bits</th><th class="n">9-bit multipliers</th><th class="n">PLLs</th></tr>
+  <tr><td>MCU with GPIO</td><td class="n">3,402</td><td class="n">1,337</td><td class="n">63</td><td class="n">131,072</td><td class="n">4</td><td class="n">1</td></tr>
+  <tr><td><b>MCU with GPIO and Interrupt Capability</b></td><td class="n"><b>4,056</b></td><td class="n"><b>1,905</b></td><td class="n"><b>64</b></td><td class="n"><b>131,072</b></td><td class="n"><b>4</b></td><td class="n"><b>1</b></td></tr>
+  <tr><td>Pipelined MCU with GPIO and Interrupt Capability</td><td colspan="6" style="text-align:center;color:#5b6472">not attempted (bonus)</td></tr>
+  <caption><b>Table 8.</b> Area. The full design occupies 4 % of the device.</caption>
+</table>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_flow_summary.png" alt="Quartus area report">
+  <figcaption><span class="fnum">Figure 22.</span> Quartus area report for the final build.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_Resource_Utilization_by_Entity.png" alt="Resource utilization by entity">
+  <figcaption><span class="fnum">Figure 23.</span> Fitter resource utilization by entity — the source
+  of the per-block costs in Table 9.</figcaption>
+</figure>
+
+<table>
+  <tr><th>Block added beyond a GPIO-only MCU</th><th class="n">Logic elements</th><th class="n">Registers</th></tr>
+  <tr><td>BasicTimer</td><td class="n">202</td><td class="n">148</td></tr>
+  <tr><td>divider</td><td class="n">281</td><td class="n">267</td></tr>
+  <tr><td>cdc_sync × 4</td><td class="n">132</td><td class="n">132</td></tr>
+  <tr><td>intr_ctrl</td><td class="n">31</td><td class="n">16</td></tr>
+  <tr><td>intr_fsm</td><td class="n">4</td><td class="n">3</td></tr>
+  <tr><td>div_stall_ctrl</td><td class="n">4</td><td class="n">2</td></tr>
+  <tr><th>Total</th><th class="n">654</th><th class="n">568</th></tr>
+  <caption><b>Table 9.</b> Incremental cost of the timer, interrupt subsystem and accelerator:
+  654 logic elements, about 16 % on top of a 3,402-element GPIO baseline. For scale, IDECODE alone
+  costs 1,705 elements — the 32×32 register file dominates the design.</caption>
+</table>
+
+<h3>7.2 Performance</h3>
+<table>
+  <tr><th></th><th class="n">f<sub>max</sub></th><th>Critical path — slowest submodule and why</th><th class="n">f<sub>MCLK</sub></th></tr>
+  <tr><td>MCU with GPIO</td><td class="n">25.84 MHz</td><td>Identical to the row below: the limiting path lies inside the core, not in the peripherals, so removing them does not raise f<sub>max</sub>.</td><td class="n">25 MHz</td></tr>
+  <tr><td><b>MCU with GPIO and Interrupt Capability</b></td><td class="n"><b>25.84 MHz</b> (MCLK)<br><b>199.6 MHz</b> (DIVCLK)</td><td><b>ITCM address register → DTCM write-enable register.</b> The DTCM is clocked on the falling edge of MCLK per Figure 3, so this is a cross-edge path that receives only <em>half</em> a clock period — 20.000 ns of a 40 ns clock against 19.997 ns of delay. It spans instruction fetch, decode, ALU address generation and the memory-mapped address decode, plus two M9K accesses. The combinational logic itself would support roughly 50 MHz on a full period; the halving is the entire reason the MCU sits at 25 MHz.</td><td class="n">25 MHz</td></tr>
+  <tr><td>Pipelined MCU with GPIO and Interrupt Capability</td><td colspan="3" style="text-align:center;color:#5b6472">not attempted (bonus)</td></tr>
+  <caption><b>Table 10.</b> Performance. Worst-case setup slack is +0.648 ns on MCLK and +1.656 ns on
+  DIVCLK, both with zero total negative slack.</caption>
+</table>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_Fmax.png" alt="Quartus fmax report">
+  <figcaption><span class="fnum">Figure 24.</span> Quartus f<sub>max</sub> report — both PLL output
+  clocks.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_Setup_Summary.png" alt="Setup summary">
+  <figcaption><span class="fnum">Figure 25.</span> Setup summary: MCLK +0.648 ns, DIVCLK +1.656 ns,
+  TNS zero on both.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_timing_analayzer_slack.png" alt="Critical path">
+  <figcaption><span class="fnum">Figure 26.</span> The worst-case setup path, showing the 20.000 ns
+  launch-to-latch relationship that reveals it as a half-period cross-edge path.</figcaption>
+</figure>
+
+<h3>7.3 Power</h3>
+<table>
+  <tr><th></th><th class="n">Total</th><th class="n">Static</th><th class="n">Dynamic</th><th class="n">I/O</th></tr>
+  <tr><td>MCU with GPIO</td><td class="n">192.30 mW</td><td class="n">102.19 mW</td><td class="n">42.07 mW</td><td class="n">48.04 mW</td></tr>
+  <tr><td><b>MCU with GPIO and Interrupt Capability</b></td><td class="n"><b>201.15 mW</b></td><td class="n"><b>102.19 mW</b></td><td class="n"><b>50.16 mW</b></td><td class="n"><b>48.80 mW</b></td></tr>
+  <tr><td>Pipelined MCU with GPIO and Interrupt Capability</td><td colspan="4" style="text-align:center;color:#5b6472">not attempted (bonus)</td></tr>
+  <caption><b>Table 11.</b> Thermal power dissipation. The first row follows the same derivation as
+  Table 8: static power is device leakage and essentially constant, I/O power scales with pin count,
+  and core dynamic power scales with the logic-cell ratio. Static power dominates at just over half
+  the total, which is expected for a design occupying 4 % of a large device at 25 MHz.</caption>
+</table>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_Power.png" alt="Power Analyzer report">
+  <figcaption><span class="fnum">Figure 27.</span> Quartus Power Analyzer report. The analyser
+  reports low confidence because no switching-activity file was supplied, so the figures use default
+  toggle rates.</figcaption>
+</figure>
+
+<figure>
+  <img src="../Images/RV32IMscMCU/whole%20system/sc_chop_planner.png" alt="Chip Planner">
+  <figcaption><span class="fnum">Figure 28.</span> Chip Planner floorplan of the placed design.</figcaption>
+</figure>
+
+<div class="pb"></div>
+<h2>8. Findings</h2>
+
+<h3>8.1 The Figure 10b synchronisers were being implemented in RAM</h3>
+<p>Inspecting the Fitter's per-entity report revealed that <code>cdc_sync</code>'s two stages had
+been recognised as a shift register and mapped into <em>two M9K blocks</em> — Quartus had merged
+the three MCLK→DIVCLK instances (32 + 32 + 1 = 65 bits, 2 deep) into a single 2 × 65 ALTSYNCRAM.</p>
+
+<p>This is wrong for a synchroniser. The first stage exists so that a metastable sample lands in a
+dedicated flip-flop and is given a full destination-clock period to resolve; a memory cell read back
+through an address counter does not provide that guarantee. Figure 10b draws two flip-flops, so two
+flip-flops is what must be built. Adding an <code>AUTO_SHIFT_REGISTER_RECOGNITION OFF</code>
+attribute to the architecture fixed it — and improved <em>both</em> clock domains, because the RAM
+lookup had been sitting on both critical paths:</p>
+
+<table>
+  <tr><th></th><th class="n">Before</th><th class="n">After</th></tr>
+  <tr><td>MCLK f<sub>max</sub> / slack</td><td class="n">25.00 MHz / +0.003 ns</td><td class="n">25.84 MHz / +0.648 ns</td></tr>
+  <tr><td>DIVCLK f<sub>max</sub> / slack</td><td class="n">185.32 MHz / +1.270 ns</td><td class="n">199.6 MHz / +1.656 ns</td></tr>
+  <tr><td>Memory bits</td><td class="n">131,202</td><td class="n">131,072 (exactly the two TCMs)</td></tr>
+  <tr><td>Registers</td><td class="n">1,773</td><td class="n">1,905</td></tr>
+  <caption><b>Table 12.</b> Effect of disabling shift-register inference on the CDC synchronisers.
+  Two M9K blocks were recovered, 132 real flip-flops appeared, and both domains got faster.</caption>
+</table>
+
+<h3>8.2 Partial address decode</h3>
+<p><code>is_peripheral</code> examines only address bits 15:14:13, so the 64-byte SFR window repeats
+128 times across <code>0x2000–0x3FFF</code>. This is a standard technique and deliberate here for
+timing, since the decode gates the DTCM write enable on the critical path — but it removes fault
+containment and was the direct cause of the stack-pointer bug in §4.4. A cleaner design would use
+the full comparison to qualify the peripheral <em>chip selects</em> only, never
+<code>dtcm_we</code>.</p>
+
+<h3>8.3 Benchmark constants assume a 20 MHz clock</h3>
+<p>The interrupt benchmarks hardcode timing constants for a 20 MHz MCLK. At the delivered 25 MHz,
+BTCTL1 = 18h selects SMCLK/8 = 3.125 MHz, so BTCMPR0 = 2,500,000 produces <b>0.8 s</b> rather than
+the 1.000 s the source comments claim; test3's four intervals become 0.8 / 0.4 / 0.2 / 0.1 s, and
+test4's nominal 5 kHz PWM measures 6.25 kHz. This is a property of the benchmark constants, not of
+the design.</p>
+
+<h3>8.4 PWM duty convention</h3>
+<p>The Interrupt/test4 source comments describe the duty cycle as 2<sup>−k</sup>, which suggested a
+polarity conflict with Figure 8 Mode 0. The benchmark's own ReadMe resolves it: the intended sequence
+is 50 %, 75 %, 87.5 %, 93.75 % — that is 1 − 2<sup>−k</sup>, which is exactly
+(BTCL0 − BTCL1) / BTCL0, the Mode 0 formula. Figures 19 and 20 confirm it in silicon by measuring
+both switching points. The source comment is simply inconsistent with the ReadMe.</p>
+
+<h3>8.5 INTA naming</h3>
+<p><code>intr_fsm</code> drives <code>inta_o</code> as an internal active-high acknowledge strobe,
+asserted during the first service cycle, rather than as the bus-level INTA drawn on page 15. The
+service <em>sequence</em> is implemented exactly as specified — two cycles, GIE cleared, TYPE
+captured from the data bus, source flag cleared, vector loaded and jumped to with tp holding the
+return address — but a reader comparing signal levels against the figure should be aware of the
+polarity convention.</p>
+
+<h3>8.6 Benchmark issues confirmed independently</h3>
+<p>Several defects identified while bringing the benchmarks up were subsequently fixed in the
+supervisor's revision of 29 August 2026: CAPISEL never switching to VCC, an inverted loop guard,
+a missing jump, BTHOLD left asserted, and a period constant that was eight times too large for
+SMCLK/8. Figure 18 shows the corrected capture behaviour working.</p>
+
+<div class="pb"></div>
+<h2>9. Conclusions</h2>
+
+<p>The design meets the specification. An RV32IM single-cycle core with GPIO, a Basic Timer
+supporting all three modes, a prioritised interrupt controller implementing the two-cycle service
+protocol, and a clock-decoupled division accelerator all fit in 4 % of the device and close timing
+at 25 MHz with 0.648 ns of margin.</p>
+
+<p><b>The accelerator is the main architectural result.</b> Placing the divider in a 150 MHz domain
+rather than clocking it at MCLK cuts the stall from 32 cycles to 8 and lifts IPC on RV32IM/test1
+from 0.500 to 0.798. Because the retired-instruction count is unchanged, this is an exact
+comparison. The cost is 281 logic elements for the divider and 132 more for the synchronisers that
+make the crossing safe — around 10 % of the design for a 60 % improvement in IPC on divide-heavy
+code.</p>
+
+<p><b>Frequency is limited by the memory architecture, not by logic depth.</b> The critical path
+gets only half a clock period because the DTCM is negedge-clocked, as the single-cycle organisation
+of Figure 3 requires. The same logic would support roughly 50 MHz on a full period. Raising
+f<sub>max</sub> meaningfully would therefore require pipelining — which is precisely what the bonus
+task asks for, and it is worth noting that the bottleneck we measured is the one that
+pipelining exists to remove.</p>
+
+<p><b>Verification agreed across three independent paths.</b> The simulated cycle count, the
+hardware cycle count and the RARS instruction count all reconcile on RV32IM/test1; the DTCM matches
+the golden model both in simulation and through ISMCE; and every peripheral behaviour observed in
+ModelSim was reproduced on the board, down to the input-capture value of 197 appearing identically
+in simulation, in a Signal-Tap trace, and in the DTCM readback.</p>
+
+<p>The most instructive moment of the project was not a functional bug but a synthesis one: the
+Figure 10b synchronisers had been silently implemented in block RAM, which would have satisfied
+every functional test while quietly removing the metastability protection they exist to provide.
+Finding it required reading the Fitter's per-entity report rather than trusting the summary — and
+fixing it improved area, both clock domains, and correctness at once.</p>
+
+<p style="margin-top:2em;color:#5b6472;font-size:10pt">Full source, testbench, run scripts, memory
+images and Quartus outputs are in the accompanying submission archive; see
+<code>DOC/Readme.txt</code> for a description of every folder and file.</p>

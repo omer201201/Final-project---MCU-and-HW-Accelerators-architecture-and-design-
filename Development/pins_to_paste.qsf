@@ -1,0 +1,99 @@
+# ============================================================================
+# Pin + device assignments for the new Quartus project.
+# CLOSE QUARTUS before pasting these into RV32IMscMCU.qsf, or Quartus will
+# overwrite them when it next saves.
+# ============================================================================
+
+# ---- Device: the new project was created for a Cyclone V. The DE2-115 is
+# ---- Cyclone IV E. Fix this FIRST or none of the pin names below are valid.
+set_global_assignment -name FAMILY "Cyclone IV E"
+set_global_assignment -name DEVICE EP4CE115F29C7
+
+# ---- Board pins (64), carried over from the old project ----
+set_location_assignment PIN_Y2 -to clk_i
+set_location_assignment PIN_M23 -to rst_i
+set_location_assignment PIN_AB28 -to SW_i[0]
+set_location_assignment PIN_AC28 -to SW_i[1]
+set_location_assignment PIN_AC27 -to SW_i[2]
+set_location_assignment PIN_AD27 -to SW_i[3]
+set_location_assignment PIN_AB27 -to SW_i[4]
+set_location_assignment PIN_AC26 -to SW_i[5]
+set_location_assignment PIN_AD26 -to SW_i[6]
+set_location_assignment PIN_AB26 -to SW_i[7]
+set_location_assignment PIN_G19 -to LEDR_o[0]
+set_location_assignment PIN_F19 -to LEDR_o[1]
+set_location_assignment PIN_E19 -to LEDR_o[2]
+set_location_assignment PIN_F21 -to LEDR_o[3]
+set_location_assignment PIN_F18 -to LEDR_o[4]
+set_location_assignment PIN_E18 -to LEDR_o[5]
+set_location_assignment PIN_J19 -to LEDR_o[6]
+set_location_assignment PIN_H19 -to LEDR_o[7]
+set_location_assignment PIN_G18 -to HEX0_o[0]
+set_location_assignment PIN_F22 -to HEX0_o[1]
+set_location_assignment PIN_E17 -to HEX0_o[2]
+set_location_assignment PIN_L26 -to HEX0_o[3]
+set_location_assignment PIN_L25 -to HEX0_o[4]
+set_location_assignment PIN_J22 -to HEX0_o[5]
+set_location_assignment PIN_H22 -to HEX0_o[6]
+set_location_assignment PIN_M24 -to HEX1_o[0]
+set_location_assignment PIN_Y22 -to HEX1_o[1]
+set_location_assignment PIN_W21 -to HEX1_o[2]
+set_location_assignment PIN_W22 -to HEX1_o[3]
+set_location_assignment PIN_W25 -to HEX1_o[4]
+set_location_assignment PIN_U23 -to HEX1_o[5]
+set_location_assignment PIN_U24 -to HEX1_o[6]
+set_location_assignment PIN_AA25 -to HEX2_o[0]
+set_location_assignment PIN_AA26 -to HEX2_o[1]
+set_location_assignment PIN_Y25 -to HEX2_o[2]
+set_location_assignment PIN_W26 -to HEX2_o[3]
+set_location_assignment PIN_Y26 -to HEX2_o[4]
+set_location_assignment PIN_W27 -to HEX2_o[5]
+set_location_assignment PIN_W28 -to HEX2_o[6]
+set_location_assignment PIN_V21 -to HEX3_o[0]
+set_location_assignment PIN_U21 -to HEX3_o[1]
+set_location_assignment PIN_AB20 -to HEX3_o[2]
+set_location_assignment PIN_AA21 -to HEX3_o[3]
+set_location_assignment PIN_AD24 -to HEX3_o[4]
+set_location_assignment PIN_AF23 -to HEX3_o[5]
+set_location_assignment PIN_Y19 -to HEX3_o[6]
+set_location_assignment PIN_AB19 -to HEX4_o[0]
+set_location_assignment PIN_AA19 -to HEX4_o[1]
+set_location_assignment PIN_AG21 -to HEX4_o[2]
+set_location_assignment PIN_AH21 -to HEX4_o[3]
+set_location_assignment PIN_AE19 -to HEX4_o[4]
+set_location_assignment PIN_AF19 -to HEX4_o[5]
+set_location_assignment PIN_AE18 -to HEX4_o[6]
+set_location_assignment PIN_AD18 -to HEX5_o[0]
+set_location_assignment PIN_AC18 -to HEX5_o[1]
+set_location_assignment PIN_AB18 -to HEX5_o[2]
+set_location_assignment PIN_AH19 -to HEX5_o[3]
+set_location_assignment PIN_AG19 -to HEX5_o[4]
+set_location_assignment PIN_AF18 -to HEX5_o[5]
+set_location_assignment PIN_AH18 -to HEX5_o[6]
+set_location_assignment PIN_M21 -to PB_i[0]
+set_location_assignment PIN_N21 -to PB_i[1]
+set_location_assignment PIN_R24 -to PB_i[2]
+set_location_assignment PIN_AE15 -to pwm_o
+
+# ---- Debug/observation outputs -> virtual pins ----
+# Without these Quartus needs 321 output pads; the device has 256 -> Error 169282.
+# Virtual pins stay internal nodes and remain fully tappable by Signal-Tap.
+set_instance_assignment -name VIRTUAL_PIN ON -to pc_o
+set_instance_assignment -name VIRTUAL_PIN ON -to instruction_o
+set_instance_assignment -name VIRTUAL_PIN ON -to RegWrite_ctrl_o
+set_instance_assignment -name VIRTUAL_PIN ON -to MemWrite_ctrl_o
+set_instance_assignment -name VIRTUAL_PIN ON -to Branch_ctrl_o
+set_instance_assignment -name VIRTUAL_PIN ON -to read_data1_o
+set_instance_assignment -name VIRTUAL_PIN ON -to read_data2_o
+set_instance_assignment -name VIRTUAL_PIN ON -to write_data_o
+set_instance_assignment -name VIRTUAL_PIN ON -to alu_res_o
+set_instance_assignment -name VIRTUAL_PIN ON -to brTaken_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dtcm_addr_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dtcm_data_wr_o
+set_instance_assignment -name VIRTUAL_PIN ON -to dtcm_data_rd_o
+set_instance_assignment -name VIRTUAL_PIN ON -to mclk_cnt_o
+set_instance_assignment -name VIRTUAL_PIN ON -to btifg_o
+set_instance_assignment -name VIRTUAL_PIN ON -to intr_o
+
+# ---- Timing constraints ----
+set_global_assignment -name SDC_FILE ../Quartus/RV32IMscMCU/RV32I_CORE.sdc
